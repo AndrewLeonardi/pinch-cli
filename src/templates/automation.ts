@@ -1,3 +1,5 @@
+import { getPlaygroundHtml } from "./playground.js";
+
 export function automationTemplate(
   name: string,
   slug: string,
@@ -33,7 +35,21 @@ expect_type = "json"
   const serverCode = `import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { createServer } from "http";
+import { readFileSync } from "fs";
+import { resolve, dirname } from "path";
+import { fileURLToPath } from "url";
 import { z } from "zod";
+
+// Load playground HTML at startup
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const playgroundHtml = (() => {
+  try {
+    return readFileSync(resolve(__dirname, "../public/playground.html"), "utf-8");
+  } catch {
+    return "<html><body><h1>Playground not found</h1><p>Run pinch init to regenerate.</p></body></html>";
+  }
+})();
 
 // ── Helpers ────────────────────────────────────────────
 
@@ -183,12 +199,22 @@ server.tool(
 
 // ── HTTP Server ────────────────────────────────────────
 
+// Create transport and connect once at startup
+const transport = new StreamableHTTPServerTransport({
+  sessionIdGenerator: () => crypto.randomUUID(),
+});
+await server.connect(transport);
+
 const httpServer = createServer(async (req, res) => {
+  // Serve playground UI
+  if (req.method === "GET" && (req.url === "/" || req.url === "/index.html")) {
+    res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+    res.end(playgroundHtml);
+    return;
+  }
+
+  // MCP endpoint
   if (req.url === "/mcp" && req.method === "POST") {
-    const transport = new StreamableHTTPServerTransport({
-      sessionIdGenerator: () => crypto.randomUUID(),
-    });
-    await server.connect(transport);
     await transport.handleRequest(req, res);
   } else {
     res.writeHead(404);
@@ -198,7 +224,9 @@ const httpServer = createServer(async (req, res) => {
 
 const PORT = process.env.PORT || 3100;
 httpServer.listen(PORT, () => {
-  console.log(\`🦞 ${name} running on http://localhost:\${PORT}/mcp\`);
+  console.log(\`🦞 ${name} running on http://localhost:\${PORT}\`);
+  console.log(\`   Playground: http://localhost:\${PORT}\`);
+  console.log(\`   MCP endpoint: http://localhost:\${PORT}/mcp\`);
 });
 `;
 
@@ -249,6 +277,7 @@ httpServer.listen(PORT, () => {
   return {
     "pinchers.toml": manifest,
     "src/index.ts": serverCode,
+    "public/playground.html": getPlaygroundHtml(name, description),
     "package.json": pkg,
     "tsconfig.json": tsconfig,
     ".gitignore": "node_modules/\\ndist/\\n.env\\n",

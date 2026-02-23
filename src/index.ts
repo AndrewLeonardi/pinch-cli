@@ -22,10 +22,11 @@ program
 
 program
   .command("dev")
-  .description("Start local MCP server with hot reload + REPL")
+  .description("Start local dev server with hot reload + playground")
   .option("-p, --port <port>", "port to run on", "3100")
   .option("-v, --verbose", "show full request/response JSON")
   .option("-e, --endpoint <url>", "connect to an external MCP server (skip local server)")
+  .option("--no-browser", "don't auto-open playground in browser")
   .action(devCommand);
 
 program

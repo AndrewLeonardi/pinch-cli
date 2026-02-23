@@ -1,9 +1,18 @@
 import { resolve } from "path";
-import { spawn, type ChildProcess } from "child_process";
+import { spawn, exec, type ChildProcess } from "child_process";
 import { existsSync } from "fs";
+import { platform } from "os";
 import chalk from "chalk";
 import { loadManifest } from "../lib/config.js";
 import { createInterface } from "readline";
+
+// ── Open browser helper ──────────────────────────────
+
+function openBrowser(url: string) {
+  const cmd =
+    platform() === "darwin" ? "open" : platform() === "win32" ? "start" : "xdg-open";
+  exec(`${cmd} ${url}`);
+}
 
 // ── Pretty JSON formatter ──────────────────────────────
 
@@ -303,6 +312,7 @@ export async function devCommand(options: {
   port: string;
   verbose?: boolean;
   endpoint?: string;
+  browser?: boolean;
 }) {
   // Endpoint-only mode: connect to external MCP server
   if (options.endpoint) {
@@ -344,6 +354,8 @@ export async function devCommand(options: {
   console.log(chalk.dim(`  Starting on port ${port} with hot reload...\n`));
 
   let child: ChildProcess | null = null;
+  let browserOpened = false;
+  const shouldOpenBrowser = options.browser !== false;
 
   function startServer() {
     child = spawn("npx", ["tsx", "--watch", "src/index.ts"], {
@@ -352,7 +364,20 @@ export async function devCommand(options: {
     });
 
     child.stdout?.on("data", (data: Buffer) => {
-      process.stdout.write(chalk.dim("  [server] ") + data.toString());
+      const msg = data.toString();
+      process.stdout.write(chalk.dim("  [server] ") + msg);
+
+      // Auto-open browser when server reports it's running
+      if (!browserOpened && shouldOpenBrowser && msg.includes("running on")) {
+        browserOpened = true;
+        const playgroundUrl = `http://localhost:${port}`;
+        console.log(
+          chalk.bold("\n  🦞 Playground open at ") +
+            chalk.cyan(playgroundUrl) +
+            "\n"
+        );
+        openBrowser(playgroundUrl);
+      }
     });
 
     child.stderr?.on("data", (data: Buffer) => {

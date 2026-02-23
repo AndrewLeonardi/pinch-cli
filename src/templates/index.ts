@@ -3,6 +3,8 @@ import { invoiceTemplate } from "./invoice.js";
 import { dataFetcherTemplate } from "./data-fetcher.js";
 import { automationTemplate } from "./automation.js";
 
+export { getPlaygroundHtml } from "./playground.js";
+
 export interface TemplateChoice {
   value: string;
   name: string;
