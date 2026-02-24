@@ -6,6 +6,10 @@ import chalk from "chalk";
 import { loadManifest } from "../lib/config.js";
 import { createInterface } from "readline";
 
+function hasCustomUI(): boolean {
+  return existsSync(resolve(process.cwd(), "ui/index.html"));
+}
+
 // ── Open browser helper ──────────────────────────────
 
 function openBrowser(url: string) {
@@ -348,9 +352,13 @@ export async function devCommand(options: {
     process.exit(1);
   }
 
+  const customUI = hasCustomUI();
   console.log(
     chalk.red("🦞") + chalk.bold(` pinch dev`) + ` — ${manifest.tool.name}`
   );
+  if (customUI) {
+    console.log(chalk.cyan("  ✦ Custom UI detected") + chalk.dim(" (ui/index.html)"));
+  }
   console.log(chalk.dim(`  Starting on port ${port} with hot reload...\n`));
 
   let child: ChildProcess | null = null;

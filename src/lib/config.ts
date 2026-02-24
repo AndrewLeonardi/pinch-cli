@@ -40,6 +40,10 @@ export interface PinchersManifest {
       type: "free" | "credits";
       credit_cost?: number;
     };
+    ui?: {
+      type: "auto" | "custom";
+      entry?: string;
+    };
   };
   test?: TestCase[];
 }

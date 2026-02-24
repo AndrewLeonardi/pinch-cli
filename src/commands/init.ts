@@ -14,9 +14,12 @@ export async function initCommand(nameArg?: string) {
   const category = await select({
     message: "Category:",
     choices: [
-      { value: "Finance" }, { value: "Research" }, { value: "Deployment" },
-      { value: "Email" }, { value: "Design" }, { value: "Analytics" },
-      { value: "Productivity" }, { value: "Development" },
+      { value: "Productivity" }, { value: "Finance" }, { value: "Marketing" },
+      { value: "Design" }, { value: "Development" }, { value: "Communication" },
+      { value: "Data & Analytics" }, { value: "Content" }, { value: "Education" },
+      { value: "Health & Fitness" }, { value: "Events & Planning" },
+      { value: "Legal" }, { value: "Sales" }, { value: "HR & Recruiting" },
+      { value: "Other" },
     ],
   });
 

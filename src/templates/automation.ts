@@ -1,4 +1,5 @@
 import { getPlaygroundHtml } from "./playground.js";
+import { generateServerCode } from "./server-runtime.js";
 
 export function automationTemplate(
   name: string,
@@ -32,28 +33,9 @@ input = {}
 expect_type = "json"
 `;
 
-  const serverCode = `import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import { createServer } from "http";
-import { readFileSync } from "fs";
-import { resolve, dirname } from "path";
-import { fileURLToPath } from "url";
-import { z } from "zod";
-
-// Load playground HTML at startup
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-const playgroundHtml = (() => {
-  try {
-    return readFileSync(resolve(__dirname, "../public/playground.html"), "utf-8");
-  } catch {
-    return "<html><body><h1>Playground not found</h1><p>Run pinch init to regenerate.</p></body></html>";
-  }
-})();
-
-// ── Helpers ────────────────────────────────────────────
-
-function generateId(prefix: string): string {
+  const serverCode = generateServerCode({
+    name,
+    helpers: `function generateId(prefix: string): string {
   const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
   let id = prefix + "_";
   for (let i = 0; i < 8; i++) id += chars[Math.floor(Math.random() * chars.length)];
@@ -66,11 +48,9 @@ function jsonResult(data: unknown) {
 
 function textResult(text: string) {
   return { content: [{ type: "text" as const, text }] };
-}
+}`,
 
-// ── In-memory state ────────────────────────────────────
-
-interface Task {
+    state: `interface Task {
   id: string;
   title: string;
   description: string | null;
@@ -81,154 +61,115 @@ interface Task {
   completed_at: string | null;
 }
 
-const tasks = new Map<string, Task>();
+const tasks = new Map<string, Task>();`,
 
-// ── MCP Server ─────────────────────────────────────────
+    tools: `  server.tool(
+    "create_task",
+    "Create a new task with a title, priority, and optional due date. Use this when someone wants to add a to-do item, create a reminder, or track work that needs to be done.",
+    {
+      title: z.string().describe("Title of the task"),
+      description: z.string().optional().describe("Detailed description of what needs to be done"),
+      priority: z
+        .enum(["low", "medium", "high"])
+        .default("medium")
+        .describe("Task priority level"),
+      due_date: z
+        .string()
+        .optional()
+        .describe("Due date in YYYY-MM-DD format"),
+    },
+    async ({ title, description, priority, due_date }) => {
+      const task: Task = {
+        id: generateId("task"),
+        title,
+        description: description || null,
+        priority,
+        status: "pending",
+        due_date: due_date || null,
+        created_at: new Date().toISOString(),
+        completed_at: null,
+      };
 
-const server = new McpServer({
-  name: "${name}",
-  version: "0.1.0",
-});
+      tasks.set(task.id, task);
 
-server.tool(
-  "create_task",
-  "Create a new task with a title, priority, and optional due date. Use this when someone wants to add a to-do item, create a reminder, or track work that needs to be done.",
-  {
-    title: z.string().describe("Title of the task"),
-    description: z.string().optional().describe("Detailed description of what needs to be done"),
-    priority: z
-      .enum(["low", "medium", "high"])
-      .default("medium")
-      .describe("Task priority level"),
-    due_date: z
-      .string()
-      .optional()
-      .describe("Due date in YYYY-MM-DD format"),
-  },
-  async ({ title, description, priority, due_date }) => {
-    const task: Task = {
-      id: generateId("task"),
-      title,
-      description: description || null,
-      priority,
-      status: "pending",
-      due_date: due_date || null,
-      created_at: new Date().toISOString(),
-      completed_at: null,
-    };
-
-    tasks.set(task.id, task);
-
-    return jsonResult({
-      message: \`Task created: "\${title}"\`,
-      task,
-      tip: "Use list_tasks to see all tasks, or complete_task to mark this done.",
-    });
-  }
-);
-
-server.tool(
-  "list_tasks",
-  "List all tasks, optionally filtered by status. Use this when someone wants to see their to-do list, check pending items, or review completed work.",
-  {
-    status: z
-      .enum(["pending", "in_progress", "done"])
-      .optional()
-      .describe("Filter by status (omit to show all)"),
-    priority: z
-      .enum(["low", "medium", "high"])
-      .optional()
-      .describe("Filter by priority"),
-  },
-  async ({ status, priority }) => {
-    let filtered = Array.from(tasks.values());
-
-    if (status) filtered = filtered.filter((t) => t.status === status);
-    if (priority) filtered = filtered.filter((t) => t.priority === priority);
-
-    // Sort: high priority first, then by creation date
-    const priorityOrder = { high: 0, medium: 1, low: 2 };
-    filtered.sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority]);
-
-    return jsonResult({
-      total: filtered.length,
-      tasks: filtered.map((t) => ({
-        id: t.id,
-        title: t.title,
-        status: t.status,
-        priority: t.priority,
-        due_date: t.due_date,
-      })),
-    });
-  }
-);
-
-server.tool(
-  "complete_task",
-  "Mark a task as done. Use this when someone has finished a task and wants to mark it complete. After creating tasks with create_task, use this to check them off.",
-  {
-    task_id: z.string().describe("The task ID (e.g. task_abc12345)"),
-  },
-  async ({ task_id }) => {
-    const task = tasks.get(task_id);
-
-    if (!task) {
-      const available = Array.from(tasks.keys());
       return jsonResult({
-        error: \`Task "\${task_id}" not found\`,
-        available_tasks: available.length > 0 ? available : "No tasks created yet. Use create_task first.",
+        message: \\\`Task created: "\\\${title}"\\\`,
+        task,
+        tip: "Use list_tasks to see all tasks, or complete_task to mark this done.",
       });
     }
+  );
 
-    if (task.status === "done") {
-      return textResult(\`Task "\${task.title}" is already completed.\`);
+  server.tool(
+    "list_tasks",
+    "List all tasks, optionally filtered by status. Use this when someone wants to see their to-do list, check pending items, or review completed work.",
+    {
+      status: z
+        .enum(["pending", "in_progress", "done"])
+        .optional()
+        .describe("Filter by status (omit to show all)"),
+      priority: z
+        .enum(["low", "medium", "high"])
+        .optional()
+        .describe("Filter by priority"),
+    },
+    async ({ status, priority }) => {
+      let filtered = Array.from(tasks.values());
+
+      if (status) filtered = filtered.filter((t) => t.status === status);
+      if (priority) filtered = filtered.filter((t) => t.priority === priority);
+
+      // Sort: high priority first, then by creation date
+      const priorityOrder = { high: 0, medium: 1, low: 2 };
+      filtered.sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority]);
+
+      return jsonResult({
+        total: filtered.length,
+        tasks: filtered.map((t) => ({
+          id: t.id,
+          title: t.title,
+          status: t.status,
+          priority: t.priority,
+          due_date: t.due_date,
+        })),
+      });
     }
+  );
 
-    task.status = "done";
-    task.completed_at = new Date().toISOString();
+  server.tool(
+    "complete_task",
+    "Mark a task as done. Use this when someone has finished a task and wants to mark it complete. After creating tasks with create_task, use this to check them off.",
+    {
+      task_id: z.string().describe("The task ID (e.g. task_abc12345)"),
+    },
+    async ({ task_id }) => {
+      const task = tasks.get(task_id);
 
-    const remaining = Array.from(tasks.values()).filter((t) => t.status !== "done").length;
+      if (!task) {
+        const available = Array.from(tasks.keys());
+        return jsonResult({
+          error: \\\`Task "\\\${task_id}" not found\\\`,
+          available_tasks: available.length > 0 ? available : "No tasks created yet. Use create_task first.",
+        });
+      }
 
-    return jsonResult({
-      message: \`✓ Completed: "\${task.title}"\`,
-      task,
-      remaining_tasks: remaining,
-    });
-  }
-);
+      if (task.status === "done") {
+        return textResult(\\\`Task "\\\${task.title}" is already completed.\\\`);
+      }
 
-// ── HTTP Server ────────────────────────────────────────
+      task.status = "done";
+      task.completed_at = new Date().toISOString();
 
-// Create transport and connect once at startup
-const transport = new StreamableHTTPServerTransport({
-  sessionIdGenerator: () => crypto.randomUUID(),
-});
-await server.connect(transport);
+      const remaining = Array.from(tasks.values()).filter((t) => t.status !== "done").length;
 
-const httpServer = createServer(async (req, res) => {
-  // Serve playground UI
-  if (req.method === "GET" && (req.url === "/" || req.url === "/index.html")) {
-    res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
-    res.end(playgroundHtml);
-    return;
-  }
-
-  // MCP endpoint
-  if (req.url === "/mcp" && req.method === "POST") {
-    await transport.handleRequest(req, res);
-  } else {
-    res.writeHead(404);
-    res.end("Not found");
-  }
-});
-
-const PORT = process.env.PORT || 3100;
-httpServer.listen(PORT, () => {
-  console.log(\`🦞 ${name} running on http://localhost:\${PORT}\`);
-  console.log(\`   Playground: http://localhost:\${PORT}\`);
-  console.log(\`   MCP endpoint: http://localhost:\${PORT}/mcp\`);
-});
-`;
+      return jsonResult({
+        message: \\\`✓ Completed: "\\\${task.title}"\\\`,
+        task,
+        remaining_tasks: remaining,
+      });
+    }
+  );`,
+  });
 
   const pkg = JSON.stringify(
     {

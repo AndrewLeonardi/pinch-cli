@@ -1,7 +1,31 @@
 import chalk from "chalk";
-import { readFile } from "fs/promises";
-import { resolve } from "path";
+import { readFile, readdir, stat } from "fs/promises";
+import { resolve, join, relative } from "path";
+import { existsSync } from "fs";
 import { loadConfig, loadManifest, getApiKey, getPlatformUrl } from "../lib/config.js";
+
+async function bundleUIDirectory(): Promise<Record<string, string> | null> {
+  const uiDir = resolve(process.cwd(), "ui");
+  if (!existsSync(uiDir)) return null;
+
+  const files: Record<string, string> = {};
+
+  async function readDirRecursive(dir: string) {
+    const entries = await readdir(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      const fullPath = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        await readDirRecursive(fullPath);
+      } else if (entry.isFile()) {
+        const relPath = relative(uiDir, fullPath);
+        files[relPath] = await readFile(fullPath, "utf-8");
+      }
+    }
+  }
+
+  await readDirRecursive(uiDir);
+  return Object.keys(files).length > 0 ? files : null;
+}
 
 export async function publishCommand() {
   console.log(chalk.red("🦞") + chalk.bold(" pinch publish") + " — submit to Pinchers.ai\n");
@@ -43,6 +67,14 @@ export async function publishCommand() {
     // README is optional
   }
 
+  // Bundle custom UI files if present
+  const uiFiles = await bundleUIDirectory();
+  if (uiFiles) {
+    const fileCount = Object.keys(uiFiles).length;
+    console.log(chalk.cyan("  ✦ Custom UI: ") + chalk.dim(`${fileCount} file${fileCount > 1 ? "s" : ""} in ui/`));
+    console.log();
+  }
+
   const platformUrl = getPlatformUrl();
 
   try {
@@ -56,6 +88,7 @@ export async function publishCommand() {
         manifest: tool,
         source_code: sourceCode,
         readme_md: readmeMd,
+        ...(uiFiles ? { ui_files: uiFiles } : {}),
       }),
     });
 

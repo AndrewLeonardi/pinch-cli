@@ -1,4 +1,5 @@
 import { getPlaygroundHtml } from "./playground.js";
+import { generateServerCode } from "./server-runtime.js";
 
 export function invoiceTemplate(
   name: string,
@@ -33,28 +34,9 @@ input = { items = '[{"description":"Consulting","unit_price":150,"quantity":10}]
 expect_contains = "1500"
 `;
 
-  const serverCode = `import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import { createServer } from "http";
-import { readFileSync } from "fs";
-import { resolve, dirname } from "path";
-import { fileURLToPath } from "url";
-import { z } from "zod";
-
-// Load playground HTML at startup
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-const playgroundHtml = (() => {
-  try {
-    return readFileSync(resolve(__dirname, "../public/playground.html"), "utf-8");
-  } catch {
-    return "<html><body><h1>Playground not found</h1><p>Run pinch init to regenerate.</p></body></html>";
-  }
-})();
-
-// ── Helpers ────────────────────────────────────────────
-
-function generateId(prefix: string): string {
+  const serverCode = generateServerCode({
+    name,
+    helpers: `function generateId(prefix: string): string {
   const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
   let id = prefix + "_";
   for (let i = 0; i < 10; i++) id += chars[Math.floor(Math.random() * chars.length)];
@@ -78,8 +60,6 @@ function textResult(text: string) {
   return { content: [{ type: "text" as const, text }] };
 }
 
-// ── Schemas ────────────────────────────────────────────
-
 const lineItemSchema = z.object({
   description: z.string().describe("Description of the line item"),
   quantity: z.number().default(1).describe("Quantity (defaults to 1)"),
@@ -89,126 +69,87 @@ const lineItemSchema = z.object({
 const currencySchema = z
   .enum(["USD", "EUR", "GBP", "CAD", "AUD", "JPY"])
   .default("USD")
-  .describe("Currency code");
+  .describe("Currency code");`,
 
-// ── MCP Server ─────────────────────────────────────────
+    tools: `  server.tool(
+    "create_invoice",
+    "Create a professional invoice with line items and totals. Use this when someone wants to invoice a client, bill for services, or generate a payment request.",
+    {
+      client_name: z.string().describe("Client or company name"),
+      client_email: z.string().email().optional().describe("Client email address"),
+      items: z.array(lineItemSchema).min(1).describe("Line items for the invoice"),
+      currency: currencySchema,
+      due_days: z.number().default(30).describe("Days until payment is due"),
+      notes: z.string().optional().describe("Additional notes for the invoice"),
+      from_name: z.string().optional().describe("Your name or business name"),
+    },
+    async ({ client_name, client_email, items, currency, due_days, notes, from_name }) => {
+      const invoiceId = generateId("inv");
+      const now = new Date();
+      const dueDate = new Date(now.getTime() + due_days * 86400000);
 
-const server = new McpServer({
-  name: "${name}",
-  version: "0.1.0",
-});
-
-server.tool(
-  "create_invoice",
-  "Create a professional invoice with line items and totals. Use this when someone wants to invoice a client, bill for services, or generate a payment request.",
-  {
-    client_name: z.string().describe("Client or company name"),
-    client_email: z.string().email().optional().describe("Client email address"),
-    items: z.array(lineItemSchema).min(1).describe("Line items for the invoice"),
-    currency: currencySchema,
-    due_days: z.number().default(30).describe("Days until payment is due"),
-    notes: z.string().optional().describe("Additional notes for the invoice"),
-    from_name: z.string().optional().describe("Your name or business name"),
-  },
-  async ({ client_name, client_email, items, currency, due_days, notes, from_name }) => {
-    const invoiceId = generateId("inv");
-    const now = new Date();
-    const dueDate = new Date(now.getTime() + due_days * 86400000);
-
-    const lineItems = items.map((item) => ({
-      description: item.description,
-      quantity: item.quantity,
-      unit_price: item.unit_price,
-      total: item.quantity * item.unit_price,
-    }));
-
-    const subtotal = lineItems.reduce((sum, li) => sum + li.total, 0);
-
-    return jsonResult({
-      invoice_id: invoiceId,
-      status: "created",
-      from: from_name || "Your Business",
-      client: { name: client_name, email: client_email || null },
-      date: now.toISOString().split("T")[0],
-      due_date: dueDate.toISOString().split("T")[0],
-      line_items: lineItems.map((li) => ({
-        ...li,
-        total: formatCurrency(li.total, currency),
-      })),
-      subtotal: formatCurrency(subtotal, currency),
-      total: formatCurrency(subtotal, currency),
-      currency,
-      notes: notes || null,
-    });
-  }
-);
-
-server.tool(
-  "calculate_totals",
-  "Calculate invoice totals with optional tax and discounts. Use this when someone needs to compute subtotals, apply tax rates, or calculate discounts on line items.",
-  {
-    items: z.array(lineItemSchema).min(1).describe("Line items to calculate"),
-    tax_rate: z.number().min(0).max(100).optional().describe("Tax rate as percentage (e.g. 8.5)"),
-    discount_percent: z.number().min(0).max(100).optional().describe("Discount percentage"),
-    currency: currencySchema,
-  },
-  async ({ items, tax_rate, discount_percent, currency }) => {
-    const subtotal = items.reduce((sum, item) => sum + item.quantity * item.unit_price, 0);
-    const discount = discount_percent ? subtotal * (discount_percent / 100) : 0;
-    const afterDiscount = subtotal - discount;
-    const tax = tax_rate ? afterDiscount * (tax_rate / 100) : 0;
-    const total = afterDiscount + tax;
-
-    return jsonResult({
-      line_items: items.map((item) => ({
+      const lineItems = items.map((item) => ({
         description: item.description,
         quantity: item.quantity,
-        unit_price: formatCurrency(item.unit_price, currency),
-        total: formatCurrency(item.quantity * item.unit_price, currency),
-      })),
-      subtotal: formatCurrency(subtotal, currency),
-      discount: discount > 0 ? formatCurrency(discount, currency) : null,
-      discount_percent: discount_percent || null,
-      tax: tax > 0 ? formatCurrency(tax, currency) : null,
-      tax_rate: tax_rate || null,
-      total: formatCurrency(total, currency),
-      currency,
-    });
-  }
-);
+        unit_price: item.unit_price,
+        total: item.quantity * item.unit_price,
+      }));
 
-// ── HTTP Server ────────────────────────────────────────
+      const subtotal = lineItems.reduce((sum, li) => sum + li.total, 0);
 
-// Create transport and connect once at startup
-const transport = new StreamableHTTPServerTransport({
-  sessionIdGenerator: () => crypto.randomUUID(),
-});
-await server.connect(transport);
+      return jsonResult({
+        invoice_id: invoiceId,
+        status: "created",
+        from: from_name || "Your Business",
+        client: { name: client_name, email: client_email || null },
+        date: now.toISOString().split("T")[0],
+        due_date: dueDate.toISOString().split("T")[0],
+        line_items: lineItems.map((li) => ({
+          ...li,
+          total: formatCurrency(li.total, currency),
+        })),
+        subtotal: formatCurrency(subtotal, currency),
+        total: formatCurrency(subtotal, currency),
+        currency,
+        notes: notes || null,
+      });
+    }
+  );
 
-const httpServer = createServer(async (req, res) => {
-  // Serve playground UI
-  if (req.method === "GET" && (req.url === "/" || req.url === "/index.html")) {
-    res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
-    res.end(playgroundHtml);
-    return;
-  }
+  server.tool(
+    "calculate_totals",
+    "Calculate invoice totals with optional tax and discounts. Use this when someone needs to compute subtotals, apply tax rates, or calculate discounts on line items.",
+    {
+      items: z.array(lineItemSchema).min(1).describe("Line items to calculate"),
+      tax_rate: z.number().min(0).max(100).optional().describe("Tax rate as percentage (e.g. 8.5)"),
+      discount_percent: z.number().min(0).max(100).optional().describe("Discount percentage"),
+      currency: currencySchema,
+    },
+    async ({ items, tax_rate, discount_percent, currency }) => {
+      const subtotal = items.reduce((sum, item) => sum + item.quantity * item.unit_price, 0);
+      const discount = discount_percent ? subtotal * (discount_percent / 100) : 0;
+      const afterDiscount = subtotal - discount;
+      const tax = tax_rate ? afterDiscount * (tax_rate / 100) : 0;
+      const total = afterDiscount + tax;
 
-  // MCP endpoint
-  if (req.url === "/mcp" && req.method === "POST") {
-    await transport.handleRequest(req, res);
-  } else {
-    res.writeHead(404);
-    res.end("Not found");
-  }
-});
-
-const PORT = process.env.PORT || 3100;
-httpServer.listen(PORT, () => {
-  console.log(\`🦞 ${name} running on http://localhost:\${PORT}\`);
-  console.log(\`   Playground: http://localhost:\${PORT}\`);
-  console.log(\`   MCP endpoint: http://localhost:\${PORT}/mcp\`);
-});
-`;
+      return jsonResult({
+        line_items: items.map((item) => ({
+          description: item.description,
+          quantity: item.quantity,
+          unit_price: formatCurrency(item.unit_price, currency),
+          total: formatCurrency(item.quantity * item.unit_price, currency),
+        })),
+        subtotal: formatCurrency(subtotal, currency),
+        discount: discount > 0 ? formatCurrency(discount, currency) : null,
+        discount_percent: discount_percent || null,
+        tax: tax > 0 ? formatCurrency(tax, currency) : null,
+        tax_rate: tax_rate || null,
+        total: formatCurrency(total, currency),
+        currency,
+      });
+    }
+  );`,
+  });
 
   const pkg = JSON.stringify(
     {
