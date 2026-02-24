@@ -126,8 +126,10 @@ const bridgeScript = \`<script>
       return { id: artifactId, url: "/p/" + artifactId + " (available after deploy)" };
     },
     ready: _ensureSession().then(function() {
+      window.dispatchEvent(new Event("pinch:ready"));
       document.dispatchEvent(new Event("pinch:ready"));
-      // Backward compat event
+      // Backward compat events
+      window.dispatchEvent(new Event("pinchers:ready"));
       document.dispatchEvent(new Event("pinchers:ready"));
     })
   };
