@@ -1,5 +1,6 @@
 import { getPlaygroundHtml } from "./playground.js";
-import { generateServerCode } from "./server-runtime.js";
+import { generateToolsFile, generateDevServer, getPackageJson, getTsConfig, getGitignore, getEnvExample, getReadme } from "./server-runtime.js";
+import { generateWranglerConfig } from "../lib/worker-gen.js";
 
 export function dataFetcherTemplate(
   name: string,
@@ -33,8 +34,7 @@ input = { url = "https://httpbin.org/json" }
 expect_type = "json"
 `;
 
-  const serverCode = generateServerCode({
-    name,
+  const toolsCode = generateToolsFile({
     helpers: `function jsonResult(data: unknown) {
   return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] };
 }
@@ -79,7 +79,7 @@ function extractPath(obj: unknown, path: string): unknown {
 
         if (!res.ok) {
           return jsonResult({
-            error: \\\`HTTP \\\${res.status} \\\${res.statusText}\\\`,
+            error: \`HTTP \${res.status} \${res.statusText}\`,
             hint: "Check the URL and try again",
           });
         }
@@ -90,7 +90,7 @@ function extractPath(obj: unknown, path: string): unknown {
           const extracted = extractPath(data, path);
           if (extracted === undefined) {
             return jsonResult({
-              error: \\\`Path "\\\${path}" not found in response\\\`,
+              error: \`Path "\${path}" not found in response\`,
               available_keys: typeof data === "object" && data !== null ? Object.keys(data) : [],
             });
           }
@@ -126,17 +126,17 @@ function extractPath(obj: unknown, path: string): unknown {
         const res = await fetch(url, { headers });
 
         if (!res.ok) {
-          return textResult(\\\`Error: HTTP \\\${res.status} \\\${res.statusText}\\\`);
+          return textResult(\`Error: HTTP \${res.status} \${res.statusText}\`);
         }
 
         let text = await res.text();
         if (text.length > max_length) {
-          text = text.slice(0, max_length) + \\\`\\\\n\\\\n... (truncated at \\\${max_length} chars)\\\`;
+          text = text.slice(0, max_length) + \`\\n\\n... (truncated at \${max_length} chars)\`;
         }
 
         return textResult(text);
       } catch (err) {
-        return textResult(\\\`Error: \\\${err instanceof Error ? err.message : String(err)}\\\`);
+        return textResult(\`Error: \${err instanceof Error ? err.message : String(err)}\`);
       }
     }
   );
@@ -178,56 +178,16 @@ function extractPath(obj: unknown, path: string): unknown {
   );`,
   });
 
-  const pkg = JSON.stringify(
-    {
-      name: slug,
-      version: "0.1.0",
-      description,
-      type: "module",
-      scripts: {
-        dev: "npx tsx --watch src/index.ts",
-        build: "tsc",
-        start: "node dist/index.js",
-      },
-      dependencies: {
-        "@modelcontextprotocol/sdk": "^1.12.1",
-        zod: "^3.24.4",
-      },
-      devDependencies: {
-        typescript: "^5.8.3",
-        tsx: "^4.19.0",
-        "@types/node": "^22.15.0",
-      },
-    },
-    null,
-    2
-  );
-
-  const tsconfig = JSON.stringify(
-    {
-      compilerOptions: {
-        target: "ES2022",
-        module: "NodeNext",
-        moduleResolution: "NodeNext",
-        outDir: "./dist",
-        rootDir: "./src",
-        declaration: true,
-        strict: true,
-        esModuleInterop: true,
-        skipLibCheck: true,
-      },
-      include: ["src/**/*"],
-    },
-    null,
-    2
-  );
-
   return {
     "pinch.toml": manifest,
-    "src/index.ts": serverCode,
+    "src/tools.ts": toolsCode,
+    "src/index.ts": generateDevServer(name),
+    "wrangler.toml": generateWranglerConfig(slug, name),
     "public/playground.html": getPlaygroundHtml(name, description),
-    "package.json": pkg,
-    "tsconfig.json": tsconfig,
-    ".gitignore": "node_modules/\\ndist/\\n.env\\n.pinch-data.json\\n",
+    "package.json": getPackageJson(slug, description),
+    "tsconfig.json": getTsConfig(),
+    ".gitignore": getGitignore(),
+    ".env.example": getEnvExample(),
+    "README.md": getReadme(name, slug, description),
   };
 }

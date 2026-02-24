@@ -1,8 +1,9 @@
 import chalk from "chalk";
-import { readFile, writeFile, readdir, stat } from "fs/promises";
+import { readFile, writeFile, readdir } from "fs/promises";
 import { resolve, join, relative } from "path";
 import { existsSync } from "fs";
-import { select, confirm } from "@inquirer/prompts";
+import { spawn } from "child_process";
+import { select, confirm, input } from "@inquirer/prompts";
 import {
   loadConfig,
   loadManifest,
@@ -12,8 +13,40 @@ import {
   type DeployTarget,
   type PinchConfig,
 } from "../lib/config.js";
+import {
+  generateWorkerEntry,
+  generateWranglerConfig,
+  detectStorageUsage,
+  detectD1Usage,
+} from "../lib/worker-gen.js";
 
-// ── Helpers ──────────────────────────────────────────────
+// ── Shell helper ────────────────────────────────────────
+
+async function runCommand(
+  cmd: string,
+  args: string[],
+  opts?: { cwd?: string; env?: Record<string, string> }
+): Promise<{ stdout: string; stderr: string; code: number }> {
+  return new Promise((res) => {
+    const child = spawn(cmd, args, {
+      cwd: opts?.cwd || process.cwd(),
+      env: { ...process.env, ...(opts?.env || {}) },
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+
+    let stdout = "";
+    let stderr = "";
+    child.stdout?.on("data", (d: Buffer) => (stdout += d.toString()));
+    child.stderr?.on("data", (d: Buffer) => (stderr += d.toString()));
+
+    child.on("close", (code) => res({ stdout, stderr, code: code || 0 }));
+    child.on("error", (err) =>
+      res({ stdout, stderr: stderr || err.message, code: 1 })
+    );
+  });
+}
+
+// ── File bundlers ───────────────────────────────────────
 
 async function bundleUIDirectory(): Promise<Record<string, string> | null> {
   const uiDir = resolve(process.cwd(), "ui");
@@ -52,7 +85,11 @@ async function bundleServerFiles(): Promise<Record<string, string> | null> {
       if (entry.isDirectory()) {
         if (entry.name === "node_modules") continue;
         await readDirRecursive(fullPath);
-      } else if (entry.isFile() && entry.name !== "index.ts") {
+      } else if (
+        entry.isFile() &&
+        entry.name !== "index.ts" &&
+        entry.name !== "_worker.ts"
+      ) {
         const relPath = relative(srcDir, fullPath);
         files[relPath] = await readFile(fullPath, "utf-8");
       }
@@ -65,7 +102,10 @@ async function bundleServerFiles(): Promise<Record<string, string> | null> {
 
 // ── Deploy to Cloudflare Workers ─────────────────────────
 
-async function deployCloudflare(config: PinchConfig) {
+async function deployCloudflare(
+  config: PinchConfig,
+  options?: { setup?: boolean }
+) {
   console.log(chalk.cyan("\n  ☁️  Deploying to Cloudflare Workers...\n"));
 
   const manifest = await loadManifest();
@@ -74,36 +114,83 @@ async function deployCloudflare(config: PinchConfig) {
     process.exit(1);
   }
 
-  // Check for Cloudflare credentials
-  let cfToken = config.cf_api_token || process.env.CLOUDFLARE_API_TOKEN;
-  let cfAccountId = config.cf_account_id || process.env.CLOUDFLARE_ACCOUNT_ID;
+  // ── Step 1: Check credentials ──────────────────────────
 
-  if (!cfToken || !cfAccountId) {
-    console.log(chalk.yellow("  Cloudflare credentials not found.\n"));
-    console.log("  To deploy to Cloudflare Workers, you need:");
-    console.log("    1. A Cloudflare account (free at " + chalk.cyan("https://cloudflare.com") + ")");
-    console.log("    2. An API token with Workers permissions");
-    console.log("    3. Your Account ID (found in the dashboard URL)\n");
-    console.log("  Set them as environment variables:");
-    console.log(chalk.dim("    export CLOUDFLARE_API_TOKEN=your_token"));
-    console.log(chalk.dim("    export CLOUDFLARE_ACCOUNT_ID=your_account_id\n"));
-    console.log("  Or save them with: " + chalk.cyan("pinch deploy cloudflare --setup") + "\n");
-    process.exit(1);
+  let cfToken = process.env.CLOUDFLARE_API_TOKEN || config.cf_api_token;
+  let cfAccountId = process.env.CLOUDFLARE_ACCOUNT_ID || config.cf_account_id;
+
+  if (options?.setup || !cfToken || !cfAccountId) {
+    if (!options?.setup) {
+      console.log(chalk.yellow("  Cloudflare credentials needed.\n"));
+    }
+    console.log(
+      chalk.dim(
+        "  Get an API token: https://dash.cloudflare.com/profile/api-tokens"
+      )
+    );
+    console.log(
+      chalk.dim(
+        "  Find your Account ID on the Workers & Pages overview page.\n"
+      )
+    );
+
+    cfToken = await input({
+      message: "Cloudflare API Token:",
+      default: cfToken || undefined,
+    });
+
+    cfAccountId = await input({
+      message: "Cloudflare Account ID:",
+      default: cfAccountId || undefined,
+    });
+
+    if (!cfToken || !cfAccountId) {
+      console.log(chalk.red("\n  Both API Token and Account ID are required.\n"));
+      process.exit(1);
+    }
+
+    const shouldSave = await confirm({
+      message: "Save credentials to ~/.pinchrc for future deploys?",
+      default: true,
+    });
+
+    if (shouldSave) {
+      config.cf_api_token = cfToken;
+      config.cf_account_id = cfAccountId;
+      await saveConfig(config);
+      console.log(chalk.green("  ✓ Credentials saved\n"));
+    }
   }
 
   const tool = manifest.tool;
-  const workerName = manifest.deploy?.worker_name || tool.slug;
+  const slug = manifest.deploy?.worker_name || tool.slug;
 
-  // Read source
-  let sourceCode: string;
+  // ── Step 2: Read source + detect features ──────────────
+
+  let toolsCode: string;
   try {
-    sourceCode = await readFile(resolve(process.cwd(), "src/index.ts"), "utf-8");
+    toolsCode = await readFile(
+      resolve(process.cwd(), "src/tools.ts"),
+      "utf-8"
+    );
   } catch {
-    console.log(chalk.red("  Could not read src/index.ts\n"));
-    process.exit(1);
+    // Fallback for older projects that only have index.ts
+    try {
+      toolsCode = await readFile(
+        resolve(process.cwd(), "src/index.ts"),
+        "utf-8"
+      );
+    } catch {
+      console.log(chalk.red("  Could not read src/tools.ts\n"));
+      console.log(
+        chalk.dim("  Make sure you're in a pinch project directory.\n")
+      );
+      process.exit(1);
+    }
   }
 
-  // Read schema if exists
+  const usesStorage = detectStorageUsage(toolsCode);
+
   let schemaSql: string | null = null;
   try {
     schemaSql = await readFile(resolve(process.cwd(), "schema.sql"), "utf-8");
@@ -111,62 +198,235 @@ async function deployCloudflare(config: PinchConfig) {
     // No schema — that's fine
   }
 
-  // Bundle additional server files
-  const serverFiles = await bundleServerFiles();
+  const needsD1 = detectD1Usage(toolsCode) || schemaSql !== null;
 
-  console.log(chalk.dim("  Worker: ") + chalk.bold(workerName));
-  console.log(chalk.dim("  Source: ") + "src/index.ts" + (serverFiles ? ` + ${Object.keys(serverFiles).length} modules` : ""));
-  if (schemaSql) console.log(chalk.dim("  Database: ") + "schema.sql (D1)");
+  console.log(chalk.dim("  Worker:   ") + chalk.bold(slug));
+  console.log(chalk.dim("  Source:   ") + "src/tools.ts");
+  if (usesStorage) console.log(chalk.dim("  Storage:  ") + "Cloudflare KV");
+  if (needsD1) console.log(chalk.dim("  Database: ") + "Cloudflare D1");
   console.log();
 
-  // TODO: Direct Cloudflare API deployment
-  // For now, generate a wrangler.toml and instruct user
-  const wranglerConfig = generateWranglerToml(workerName, tool.name, schemaSql !== null);
+  // Env vars for all wrangler commands
+  const wranglerEnv: Record<string, string> = {
+    CLOUDFLARE_API_TOKEN: cfToken!,
+    CLOUDFLARE_ACCOUNT_ID: cfAccountId!,
+  };
+
+  // ── Step 3: Generate worker entry point ────────────────
+
+  const workerCode = generateWorkerEntry({
+    name: tool.name,
+    version: tool.version,
+    usesStorage,
+    usesD1: needsD1,
+  });
+
+  await writeFile(resolve(process.cwd(), "src/_worker.ts"), workerCode);
+  console.log(chalk.green("  ✓ Generated src/_worker.ts"));
+
+  // ── Step 4: Provision cloud resources ──────────────────
+
+  let kvId: string | null = null;
+  let d1Id: string | null = null;
+
+  // Read existing wrangler.toml to check for already-provisioned resources
+  let existingWrangler = "";
   const wranglerPath = resolve(process.cwd(), "wrangler.toml");
+  try {
+    existingWrangler = await readFile(wranglerPath, "utf-8");
+  } catch {}
 
-  if (!existsSync(wranglerPath)) {
-    await writeFile(wranglerPath, wranglerConfig);
-    console.log(chalk.green("  ✓ Generated wrangler.toml"));
+  // ── KV namespace
+  if (usesStorage) {
+    // Check if KV ID is already set in wrangler.toml
+    const kvMatch = existingWrangler.match(
+      /binding\s*=\s*"TOOL_KV"[\s\S]*?id\s*=\s*"([^"]+)"/
+    );
+    if (kvMatch && kvMatch[1]) {
+      kvId = kvMatch[1];
+      console.log(chalk.dim("  • KV namespace: ") + chalk.dim(kvId));
+    } else {
+      console.log(chalk.dim("  Creating KV namespace..."));
+
+      const result = await runCommand(
+        "npx",
+        ["wrangler", "kv", "namespace", "create", "TOOL_KV"],
+        { env: wranglerEnv }
+      );
+
+      const allOutput = result.stdout + "\n" + result.stderr;
+      const idMatch = allOutput.match(/id\s*=\s*"([a-f0-9]+)"/);
+
+      if (idMatch && idMatch[1]) {
+        kvId = idMatch[1];
+        console.log(chalk.green("  ✓ KV namespace created"));
+      } else if (result.code !== 0) {
+        console.log(chalk.yellow("  ⚠ Could not create KV namespace"));
+        console.log(
+          chalk.dim(
+            "    " + (result.stderr || result.stdout).trim().split("\n")[0]
+          )
+        );
+        console.log(
+          chalk.dim(
+            "    You can create it manually: npx wrangler kv namespace create TOOL_KV"
+          )
+        );
+      }
+    }
   }
 
-  console.log(chalk.green("  ✓ Ready for Cloudflare deployment!\n"));
-  console.log("  Next steps:");
-  console.log(`    ${chalk.cyan("npx wrangler deploy")}  — deploy to Cloudflare Workers`);
-  if (schemaSql) {
-    console.log(`    ${chalk.cyan("npx wrangler d1 execute DB --file=schema.sql")}  — initialize database`);
+  // ── D1 database
+  if (needsD1) {
+    const dbName = `${slug}-db`;
+    const d1Match = existingWrangler.match(
+      /database_id\s*=\s*"([a-f0-9-]+)"/
+    );
+    if (d1Match && d1Match[1]) {
+      d1Id = d1Match[1];
+      console.log(chalk.dim("  • D1 database: ") + chalk.dim(dbName));
+    } else {
+      console.log(chalk.dim("  Creating D1 database..."));
+
+      const result = await runCommand(
+        "npx",
+        ["wrangler", "d1", "create", dbName],
+        { env: wranglerEnv }
+      );
+
+      const allOutput = result.stdout + "\n" + result.stderr;
+      const idMatch = allOutput.match(
+        /database_id\s*=\s*"([a-f0-9-]+)"/
+      );
+
+      if (idMatch && idMatch[1]) {
+        d1Id = idMatch[1];
+        console.log(chalk.green("  ✓ D1 database created"));
+      } else if (result.code !== 0) {
+        // Might already exist — try to find it
+        const listResult = await runCommand(
+          "npx",
+          ["wrangler", "d1", "list", "--json"],
+          { env: wranglerEnv }
+        );
+        try {
+          const dbs = JSON.parse(listResult.stdout);
+          const existing = dbs.find(
+            (db: { name: string; uuid: string }) => db.name === dbName
+          );
+          if (existing) {
+            d1Id = existing.uuid;
+            console.log(
+              chalk.green("  ✓ D1 database found (already exists)")
+            );
+          }
+        } catch {
+          console.log(chalk.yellow("  ⚠ Could not create D1 database"));
+          console.log(
+            chalk.dim(
+              "    You can create it manually: npx wrangler d1 create " +
+                dbName
+            )
+          );
+        }
+      }
+    }
   }
+
+  // ── Step 5: Write wrangler.toml with resource IDs ──────
+
+  const newWranglerToml = generateWranglerConfig(slug, tool.name, {
+    usesStorage,
+    usesD1: needsD1,
+    ...(kvId ? { kvId } : {}),
+    ...(d1Id ? { d1DatabaseId: d1Id } : {}),
+  });
+  await writeFile(wranglerPath, newWranglerToml);
+  console.log(chalk.green("  ✓ wrangler.toml updated"));
+
+  // ── Step 6: Run D1 migration if schema.sql exists ──────
+
+  if (schemaSql && d1Id) {
+    console.log(chalk.dim("  Running database migration..."));
+
+    const migResult = await runCommand(
+      "npx",
+      [
+        "wrangler",
+        "d1",
+        "execute",
+        `${slug}-db`,
+        "--file=schema.sql",
+        "--remote",
+      ],
+      { env: wranglerEnv }
+    );
+
+    if (migResult.code === 0) {
+      console.log(chalk.green("  ✓ Database migration applied"));
+    } else {
+      console.log(chalk.yellow("  ⚠ Migration warning:"));
+      const errLine = (migResult.stderr || migResult.stdout)
+        .trim()
+        .split("\n")[0];
+      console.log(chalk.dim("    " + errLine));
+      console.log(
+        chalk.dim("    Tables may already exist (safe to ignore)")
+      );
+    }
+  }
+
+  // ── Step 7: Deploy with wrangler ───────────────────────
+
+  console.log(chalk.dim("\n  Deploying to Cloudflare Workers..."));
+
+  const deployResult = await runCommand("npx", ["wrangler", "deploy"], {
+    env: wranglerEnv,
+  });
+
+  if (deployResult.code !== 0) {
+    console.log(chalk.red("\n  ✗ Deployment failed\n"));
+    const errorLines = (deployResult.stderr || deployResult.stdout)
+      .trim()
+      .split("\n")
+      .slice(0, 12);
+    for (const line of errorLines) {
+      console.log(chalk.dim("    " + line));
+    }
+    console.log();
+    console.log("  " + chalk.bold("Troubleshooting:"));
+    console.log(
+      chalk.dim("    • Ensure your API token has Workers edit permission")
+    );
+    console.log(chalk.dim("    • Verify your Account ID is correct"));
+    console.log(
+      chalk.dim("    • Try running: npx wrangler deploy --dry-run")
+    );
+    console.log(
+      chalk.dim("    • Re-run setup: pinch deploy cloudflare --setup\n")
+    );
+    process.exit(1);
+  }
+
+  // ── Step 8: Print results ──────────────────────────────
+
+  const allOutput = deployResult.stdout + "\n" + deployResult.stderr;
+  const urlMatch = allOutput.match(/https:\/\/[^\s]+\.workers\.dev/);
+  const liveUrl = urlMatch
+    ? urlMatch[0]
+    : `https://${slug}.workers.dev`;
+
+  console.log(chalk.green("\n  ✓ Deployed successfully!\n"));
+  console.log(
+    `  ${chalk.bold("Live URL:")}      ${chalk.cyan(liveUrl)}`
+  );
+  console.log(
+    `  ${chalk.bold("MCP endpoint:")}  ${chalk.cyan(liveUrl + "/mcp")}`
+  );
   console.log();
-}
-
-function generateWranglerToml(name: string, displayName: string, hasD1: boolean): string {
-  let config = `# ${displayName} — MCP Server on Cloudflare Workers
-# Generated by pinch CLI (https://github.com/AndrewLeonardi/pinch-cli)
-
-name = "${name}"
-main = "src/index.ts"
-compatibility_date = "2025-01-01"
-compatibility_flags = ["nodejs_compat"]
-
-[durable_objects]
-bindings = [
-  { name = "MCP_AGENT", class_name = "ToolMCP" }
-]
-
-[[migrations]]
-tag = "v1"
-new_classes = ["ToolMCP"]
-`;
-
-  if (hasD1) {
-    config += `
-[[d1_databases]]
-binding = "DB"
-database_name = "${name}-db"
-database_id = "" # Run: npx wrangler d1 create ${name}-db
-`;
-  }
-
-  return config;
+  console.log(chalk.dim("  Connect from any AI client:"));
+  console.log(chalk.dim(`    ${liveUrl}/mcp`));
+  console.log();
 }
 
 // ── Deploy to Docker ─────────────────────────────────────
@@ -214,6 +474,8 @@ dist
 .env
 .pinch-data.json
 .pinchers-data.json
+src/_worker.ts
+.wrangler/
 `;
 
   const composefile = `# Docker Compose for ${tool.name}
@@ -233,11 +495,8 @@ services:
   const dockerignorePath = resolve(process.cwd(), ".dockerignore");
   const composePath = resolve(process.cwd(), "docker-compose.yml");
 
-  let filesCreated = 0;
-
   if (!existsSync(dockerfilePath)) {
     await writeFile(dockerfilePath, dockerfile);
-    filesCreated++;
     console.log(chalk.green("  ✓ Generated Dockerfile"));
   } else {
     console.log(chalk.dim("  • Dockerfile already exists (skipped)"));
@@ -245,13 +504,11 @@ services:
 
   if (!existsSync(dockerignorePath)) {
     await writeFile(dockerignorePath, dockerignore);
-    filesCreated++;
     console.log(chalk.green("  ✓ Generated .dockerignore"));
   }
 
   if (!existsSync(composePath)) {
     await writeFile(composePath, composefile);
-    filesCreated++;
     console.log(chalk.green("  ✓ Generated docker-compose.yml"));
   } else {
     console.log(chalk.dim("  • docker-compose.yml already exists (skipped)"));
@@ -273,12 +530,16 @@ services:
 // ── Deploy to Pinchers.ai Marketplace ────────────────────
 
 async function deployPinchers(config: PinchConfig) {
-  console.log(chalk.hex("#e8503a")("\n  🦞 Publishing to Pinchers.ai Marketplace...\n"));
+  console.log(
+    chalk.hex("#e8503a")("\n  🦞 Publishing to Pinchers.ai Marketplace...\n")
+  );
 
   const apiKey = getApiKey(config);
   if (!apiKey) {
     console.log(chalk.red("  Not logged in to Pinchers.ai."));
-    console.log("  Run " + chalk.cyan("pinch login") + " first, then try again.\n");
+    console.log(
+      "  Run " + chalk.cyan("pinch login") + " first, then try again.\n"
+    );
     process.exit(1);
   }
 
@@ -289,18 +550,32 @@ async function deployPinchers(config: PinchConfig) {
   }
 
   const tool = manifest.tool;
-  console.log(chalk.dim("  Publishing: ") + chalk.bold(tool.name) + chalk.dim(` v${tool.version}`));
+  console.log(
+    chalk.dim("  Publishing: ") +
+      chalk.bold(tool.name) +
+      chalk.dim(` v${tool.version}`)
+  );
   console.log(chalk.dim("  Slug: ") + tool.slug);
   console.log(chalk.dim("  Category: ") + tool.category);
   console.log();
 
-  // Read source
+  // Read source — prefer tools.ts (new structure), fallback to index.ts (legacy)
   let sourceCode: string;
   try {
-    sourceCode = await readFile(resolve(process.cwd(), "src/index.ts"), "utf-8");
+    sourceCode = await readFile(
+      resolve(process.cwd(), "src/index.ts"),
+      "utf-8"
+    );
   } catch {
-    console.log(chalk.red("  Could not read src/index.ts\n"));
-    process.exit(1);
+    try {
+      sourceCode = await readFile(
+        resolve(process.cwd(), "src/tools.ts"),
+        "utf-8"
+      );
+    } catch {
+      console.log(chalk.red("  Could not read src/index.ts or src/tools.ts\n"));
+      process.exit(1);
+    }
   }
 
   // Read README
@@ -323,11 +598,17 @@ async function deployPinchers(config: PinchConfig) {
 
   if (uiFiles) {
     const count = Object.keys(uiFiles).length;
-    console.log(chalk.cyan("  ✦ Custom UI: ") + chalk.dim(`${count} file${count > 1 ? "s" : ""} in ui/`));
+    console.log(
+      chalk.cyan("  ✦ Custom UI: ") +
+        chalk.dim(`${count} file${count > 1 ? "s" : ""} in ui/`)
+    );
   }
   if (serverFiles) {
     const count = Object.keys(serverFiles).length;
-    console.log(chalk.cyan("  ✦ Server modules: ") + chalk.dim(`${count} file${count > 1 ? "s" : ""} in src/`));
+    console.log(
+      chalk.cyan("  ✦ Server modules: ") +
+        chalk.dim(`${count} file${count > 1 ? "s" : ""} in src/`)
+    );
   }
   if (schemaSql) {
     console.log(chalk.cyan("  ✦ Database: ") + chalk.dim("schema.sql"));
@@ -357,27 +638,43 @@ async function deployPinchers(config: PinchConfig) {
       const json = (await res.json()) as { slug: string; status: string };
       console.log(chalk.green("  ✓ Submitted to Pinchers.ai!"));
       console.log(chalk.dim(`  Status: ${json.status}`));
-      console.log(chalk.dim(`  Track at: ${platformUrl}/dashboard/creator/${json.slug}\n`));
+      console.log(
+        chalk.dim(
+          `  Track at: ${platformUrl}/dashboard/creator/${json.slug}\n`
+        )
+      );
     } else {
       const err = (await res.json()) as { error: string };
       console.log(chalk.red(`  Publish failed: ${err.error}\n`));
       process.exit(1);
     }
   } catch {
-    console.log(chalk.red("  Could not reach Pinchers.ai. Check your internet connection.\n"));
+    console.log(
+      chalk.red(
+        "  Could not reach Pinchers.ai. Check your internet connection.\n"
+      )
+    );
     process.exit(1);
   }
 }
 
 // ── Main Deploy Command ──────────────────────────────────
 
-export async function deployCommand(targetArg?: string, options?: { setup?: boolean }) {
-  console.log(chalk.bold("\n  ⚡ pinch deploy") + chalk.dim(" — ship your MCP server to the world\n"));
+export async function deployCommand(
+  targetArg?: string,
+  options?: { setup?: boolean }
+) {
+  console.log(
+    chalk.bold("\n  ⚡ pinch deploy") +
+      chalk.dim(" — ship your MCP server to the world\n")
+  );
 
   const manifest = await loadManifest();
   if (!manifest) {
     console.log(chalk.red("  No pinch.toml found in this directory."));
-    console.log("  Run " + chalk.cyan("pinch init") + " to scaffold a new MCP server.\n");
+    console.log(
+      "  Run " + chalk.cyan("pinch init") + " to scaffold a new MCP server.\n"
+    );
     process.exit(1);
   }
 
@@ -393,13 +690,13 @@ export async function deployCommand(targetArg?: string, options?: { setup?: bool
     }
     target = targetArg as DeployTarget;
   } else {
-    // Interactive selection
+    // Interactive selection — Cloudflare is the recommended default
     target = await select({
       message: "Where do you want to deploy?",
       choices: [
         {
           value: "cloudflare" as DeployTarget,
-          name: "☁️  Cloudflare Workers — Edge deployment, global CDN, free tier",
+          name: "☁️  Cloudflare Workers — Edge deployment, global CDN, free tier (recommended)",
         },
         {
           value: "docker" as DeployTarget,
@@ -417,7 +714,7 @@ export async function deployCommand(targetArg?: string, options?: { setup?: bool
 
   switch (target) {
     case "cloudflare":
-      await deployCloudflare(config);
+      await deployCloudflare(config, options);
       break;
     case "docker":
       await deployDocker();

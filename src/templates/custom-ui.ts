@@ -1,5 +1,6 @@
 import { getPlaygroundHtml } from "./playground.js";
-import { generateServerCode } from "./server-runtime.js";
+import { generateToolsFile, generateDevServer, getPackageJson, getTsConfig, getGitignore, getEnvExample } from "./server-runtime.js";
+import { generateWranglerConfig } from "../lib/worker-gen.js";
 
 export function customUITemplate(
   name: string,
@@ -38,8 +39,7 @@ input = {}
 expect_contains = "items"
 `;
 
-  const serverCode = generateServerCode({
-    name,
+  const toolsCode = generateToolsFile({
     tools: `  // ─── YOUR TOOLS ─────────────────────────────────────────
   //
   // Each server.tool() creates an MCP endpoint.
@@ -145,7 +145,7 @@ expect_contains = "items"
     <!-- Welcome -->
     <section class="card welcome-card">
       <div class="welcome-hero">
-        <span class="welcome-emoji">\u{1F99E}</span>
+        <span class="welcome-emoji">\u{1F680}</span>
         <div>
           <h2 class="welcome-title">Your MCP server is ready!</h2>
           <p class="welcome-subtitle">${description}</p>
@@ -234,7 +234,7 @@ expect_contains = "items"
           <span class="step-num">1</span>
           <div>
             <strong>Add your backend tools</strong>
-            <p>Open <code>src/index.ts</code> and find the <code>server.tool()</code> calls.
+            <p>Open <code>src/tools.ts</code> and find the <code>server.tool()</code> calls.
                Replace the examples with your own tools. Each tool gets a name, input schema (Zod), and handler function.</p>
           </div>
         </div>
@@ -264,7 +264,7 @@ const data = await storage.get("mydata");</pre>
           <div>
             <strong>Deploy your server</strong>
             <p>When you're happy, run <code>pinch deploy</code>
-               to ship it to Cloudflare, Docker, or the Pinchers.ai marketplace.</p>
+               to ship it to Cloudflare Workers (or Docker / Pinchers.ai).</p>
           </div>
         </div>
 
@@ -285,7 +285,7 @@ const data = await storage.get("mydata");</pre>
             </div>
             <div class="api-item">
               <code>window.pinch.theme</code>
-              <span>Pinchers design tokens (colors, fonts)</span>
+              <span>Design tokens (colors, fonts)</span>
             </div>
           </div>
         </details>
@@ -299,7 +299,7 @@ const data = await storage.get("mydata");</pre>
       document.getElementById("status").textContent = "Connected";
       document.getElementById("status").classList.add("connected");
     }
-    if (window.pinchers && window.pinch.ready) {
+    if (window.pinch && window.pinch.ready) {
       window.pinch.ready.then(markConnected).catch(function() {});
     }
     document.addEventListener("pinch:ready", markConnected);
@@ -339,16 +339,16 @@ const data = await storage.get("mydata");</pre>
         "PATH: " + path + "\\n\\n" +
         "WHAT I WANT TO BUILD:\\n" + desc + "\\n\\n" +
         "FILES TO EDIT:\\n" +
-        "- src/index.ts \\u2014 Backend tool handlers (this is where your tool logic goes)\\n" +
+        "- src/tools.ts \\u2014 Backend tool handlers (this is where your tool logic goes)\\n" +
         "- ui/index.html \\u2014 Frontend UI (what users see)\\n" +
         "- ui/styles.css \\u2014 Styles (how it looks)\\n" +
         "- pinch.toml \\u2014 Tool config (update name and description to match)\\n\\n" +
-        "BACKEND API (src/index.ts):\\n" +
-        "Each tool is defined with server.tool(name, description, zodSchema, handler).\\n" +
+        "BACKEND API (src/tools.ts):\\n" +
+        "Tools are defined inside registerTools(server, storage) with server.tool(name, description, zodSchema, handler).\\n" +
         "Return format: { content: [{ type: \\"text\\", text: JSON.stringify(result) }] }\\n" +
         "Zod is imported as z. Types: z.string(), z.number(), z.boolean(), z.enum([...]), z.array(), z.object().\\n" +
         "z.string().describe(\\"hint\\") adds a description for the field.\\n\\n" +
-        "PERSISTENT STORAGE (available in tool handlers \\u2014 data survives restarts):\\n" +
+        "PERSISTENT STORAGE (the storage parameter in registerTools \\u2014 data survives restarts):\\n" +
         "await storage.get(\\"key\\")        \\u2192 returns stored value or null\\n" +
         "await storage.set(\\"key\\", value) \\u2192 saves any JSON value\\n" +
         "await storage.delete(\\"key\\")     \\u2192 removes a key\\n" +
@@ -361,7 +361,7 @@ const data = await storage.get("mydata");</pre>
         "window.pinch.theme.fonts \\u2192 { sans, mono }\\n\\n" +
         "DESIGN SYSTEM: DM Sans font, background #f0ece4, accent red #e8503a, border-radius 16px, borders #d9d3c7, cards white #ffffff.\\n\\n" +
         "IMPORTANT:\\n" +
-        "- Replace ALL the example tools in src/index.ts with the real ones for this tool\\n" +
+        "- Replace ALL the example tools in src/tools.ts with the real ones for this tool\\n" +
         "- Build a complete, polished UI in ui/index.html + ui/styles.css\\n" +
         "- The dev server has hot-reload \\u2014 just save files and refresh the browser\\n" +
         "- Update pinch.toml name and description to match the tool";
@@ -764,187 +764,73 @@ body {
 }
 `;
 
-  // ── README ─────────────────────────────────────────────
+  // Custom-ui template has its own README with more detail
   const readme = `# ${name}
 
 ${description}
 
+An MCP server with a custom UI, built with [pinch](https://github.com/AndrewLeonardi/pinch-cli).
+
 ## Quick Start
 
 \`\`\`bash
-npm install
-npm run dev       # starts on http://localhost:3100
+pinch dev          # Start dev server + custom UI
+pinch test         # Validate everything works
+pinch deploy       # Deploy to Cloudflare Workers
 \`\`\`
 
 ## Project Structure
 
 \`\`\`
 ${slug}/
-  src/index.ts        <- Your MCP tools (backend logic)
-  ui/index.html       <- Your custom UI (frontend)
-  ui/styles.css       <- Your styles
-  pinch.toml          <- Tool manifest (name, pricing, category)
-  public/             <- Fallback playground (auto-generated)
+  src/
+    tools.ts       <- Your tool definitions (edit this!)
+    index.ts       <- Dev server (auto-generated)
+  ui/
+    index.html     <- Your custom UI
+    styles.css     <- Your styles
+  wrangler.toml    <- Cloudflare Workers config
+  pinch.toml       <- Tool manifest
 \`\`\`
 
 ## Building Your Tool
 
-### 1. Add tools in \`src/index.ts\`
+### 1. Add tools in \`src/tools.ts\`
 
-Find the \`server.tool()\` calls inside \`createToolServer()\`. Each tool has:
-- **name** — what your UI calls via \`callTool("name", args)\`
-- **description** — shown in the marketplace
-- **schema** — input validation using [Zod](https://zod.dev)
-- **handler** — your async function that returns a result
+Each tool is defined with \`server.tool(name, description, zodSchema, handler)\`.
+The \`storage\` parameter gives you persistent key-value storage.
 
-\`\`\`typescript
-server.tool(
-  "my_tool",
-  "Description of what it does",
-  {
-    input_field: z.string().describe("What this field is for"),
-    count: z.number().default(5).describe("How many"),
-  },
-  async ({ input_field, count }) => {
-    // Your logic here
-    const result = { message: "Hello " + input_field, count };
-    return {
-      content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-    };
-  }
-);
-\`\`\`
+### 2. Build your UI in \`ui/\`
 
-### 2. Use persistent storage
-
-Need to save data between calls? Use \`storage\`:
-
-\`\`\`typescript
-// Save data
-await storage.set("users", [{ name: "Alice" }, { name: "Bob" }]);
-
-// Read data
-const users = await storage.get("users"); // returns the array, or null
-
-// Delete data
-await storage.delete("users");
-
-// List keys
-const keys = await storage.keys("user_"); // all keys starting with "user_"
-\`\`\`
-
-This saves to a local JSON file during development. In production (after publishing),
-it automatically uses Cloudflare KV — no changes needed.
-
-### 3. Build your UI in \`ui/index.html\`
-
-The bridge API is auto-injected. Use it in your JavaScript:
+The bridge API is auto-injected. Call tools from JavaScript:
 
 \`\`\`javascript
-// Call a tool
-const result = await window.pinch.callTool("my_tool", {
-  input_field: "world",
-  count: 3,
-});
-
-// List available tools (useful for debugging)
+const result = await window.pinch.callTool("my_tool", { arg: "value" });
 const tools = await window.pinch.listTools();
-
-// Wait for connection before doing anything
 await window.pinch.ready;
-
-// Access design tokens
-const { primary, bg } = window.pinch.theme.colors;
-const { sans, mono } = window.pinch.theme.fonts;
 \`\`\`
 
-### 4. Test locally
+### 3. Deploy
 
 \`\`\`bash
-npm run dev       # Start dev server with hot-reload
-pinch test        # Run automated tests from pinch.toml
-\`\`\`
-
-### 5. Publish
-
-\`\`\`bash
-pinch deploy       # Deploy to Cloudflare, Docker, or Pinchers.ai
-\`\`\`
-
-## Manifest Reference (\`pinch.toml\`)
-
-\`\`\`toml
-[tool]
-name = "My Tool"           # Display name
-slug = "my-tool"           # URL-safe identifier
-description = "..."        # Short description
-category = "Productivity"  # Browse category
-tags = ["tag1", "tag2"]    # Search tags
-version = "0.1.0"
-
-[tool.pricing]
-type = "credits"           # "credits" or "free"
-credit_cost = 1            # Credits per tool call
-
-[tool.ui]
-type = "custom"            # "custom" = your own UI
-entry = "ui/index.html"    # Entry point
+pinch deploy       # Cloudflare Workers (recommended)
+pinch deploy docker
+pinch deploy pinchers
 \`\`\`
 `;
 
-  const pkg = JSON.stringify(
-    {
-      name: slug,
-      version: "0.1.0",
-      description,
-      type: "module",
-      scripts: {
-        dev: "npx tsx --watch src/index.ts",
-        build: "tsc",
-        start: "node dist/index.js",
-      },
-      dependencies: {
-        "@modelcontextprotocol/sdk": "^1.12.1",
-        zod: "^3.24.4",
-      },
-      devDependencies: {
-        typescript: "^5.8.3",
-        tsx: "^4.19.0",
-        "@types/node": "^22.15.0",
-      },
-    },
-    null,
-    2
-  );
-
-  const tsconfig = JSON.stringify(
-    {
-      compilerOptions: {
-        target: "ES2022",
-        module: "NodeNext",
-        moduleResolution: "NodeNext",
-        outDir: "./dist",
-        rootDir: "./src",
-        declaration: true,
-        strict: true,
-        esModuleInterop: true,
-        skipLibCheck: true,
-      },
-      include: ["src/**/*"],
-    },
-    null,
-    2
-  );
-
   return {
     "pinch.toml": manifest,
-    "src/index.ts": serverCode,
+    "src/tools.ts": toolsCode,
+    "src/index.ts": generateDevServer(name),
     "ui/index.html": uiHtml,
     "ui/styles.css": uiCss,
+    "wrangler.toml": generateWranglerConfig(slug, name, { usesStorage: true }),
     "public/playground.html": getPlaygroundHtml(name, description),
-    "package.json": pkg,
-    "tsconfig.json": tsconfig,
+    "package.json": getPackageJson(slug, description),
+    "tsconfig.json": getTsConfig(),
+    ".gitignore": getGitignore(),
+    ".env.example": getEnvExample(),
     "README.md": readme,
-    ".gitignore": "node_modules/\ndist/\n.env\n.pinch-data.json\n",
   };
 }

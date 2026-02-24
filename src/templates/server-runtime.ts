@@ -1,38 +1,72 @@
 /**
- * Shared server runtime generator.
+ * Shared server runtime generators.
  *
- * Every pinch project gets the same infrastructure:
- *   - Multi-session MCP support (no "Server already initialized" on refresh)
- *   - Bridge injection (window.pinch.callTool / listTools / theme)
- *   - Auto-detection of ui/ directory for custom frontends
- *   - Static file serving with proper MIME types
- *   - Fallback to auto-generated playground when no custom UI exists
+ * Every pinch project has two source files:
+ *   src/tools.ts  — Tool definitions (user edits this)
+ *   src/index.ts  — Dev server (auto-generated infrastructure)
  *
  * Templates only provide the unique parts: tools, helpers, and state.
+ * The dev server is the same for all templates.
  */
 
-export interface ServerRuntimeConfig {
-  /** Tool display name */
-  name: string;
-  /** Additional import statements (beyond the standard MCP/http/fs ones) */
+// ── Tools file generator ────────────────────────────────
+
+export interface ToolsConfig {
+  /** Additional import statements (beyond McpServer + zod) */
   imports?: string;
   /** Helper functions (generateId, formatCurrency, etc.) */
   helpers?: string;
-  /** Shared state declarations (e.g. `const tasks = new Map<string, Task>();`) */
+  /** Shared state declarations (interfaces, Maps, etc.) */
   state?: string;
-  /** Tool registration code — called inside createToolServer() with `server` in scope */
+  /** Tool registration code — server.tool() calls inside registerTools() */
   tools: string;
 }
 
-export function generateServerCode(config: ServerRuntimeConfig): string {
+/**
+ * Generate src/tools.ts — the file users actually edit.
+ *
+ * Exports registerTools(server, storage) which templates populate
+ * with their specific tool definitions.
+ */
+export function generateToolsFile(config: ToolsConfig): string {
+  return `import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { z } from "zod";
+${config.imports || ""}
+${config.helpers ? "// ── Helpers ────────────────────────────────────────────\n\n" + config.helpers + "\n" : ""}${config.state ? "// ── State ─────────────────────────────────────────────\n\n" + config.state + "\n" : ""}
+// ── Tool Registration ─────────────────────────────────
+// Add your tools below. Each tool gets a name, description,
+// input schema (using Zod), and an async handler.
+//
+// The \`storage\` parameter gives you persistent key-value storage
+// that works both locally (.pinch-data.json) and in production (CF KV).
+
+export function registerTools(server: McpServer, storage: any) {
+${config.tools}
+}
+`;
+}
+
+// ── Dev server generator ────────────────────────────────
+
+/**
+ * Generate src/index.ts — the local dev server.
+ *
+ * This is infrastructure code that users shouldn't need to edit.
+ * It imports registerTools from tools.ts and wires up:
+ *   - Multi-session MCP support
+ *   - Bridge injection for custom UIs
+ *   - Static file serving
+ *   - Fallback playground
+ */
+export function generateDevServer(name: string): string {
   return `import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { createServer } from "http";
 import { readFileSync, writeFileSync, existsSync, statSync } from "fs";
 import { resolve, dirname, extname } from "path";
 import { fileURLToPath } from "url";
-import { z } from "zod";
-${config.imports || ""}
+import { registerTools } from "./tools.js";
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const uiDir = resolve(__dirname, "../ui");
@@ -158,10 +192,10 @@ const MIME: Record<string, string> = {
   ".ico": "image/x-icon",
 };
 
-// @pinch-storage-start
-// Persistent key-value storage.
-// Local dev: backed by .pinch-data.json in the project root.
-// Production (CF Worker): automatically swapped with Cloudflare KV.
+// ── Storage ─────────────────────────────────────────────
+// Persistent key-value storage for local dev.
+// In production (CF Worker), this is replaced with Cloudflare KV.
+
 const _storageFile = resolve(__dirname, "../.pinch-data.json");
 const storage = {
   async get(key: string): Promise<any> {
@@ -190,8 +224,7 @@ const storage = {
     } catch { return []; }
   }
 };
-// @pinch-storage-end
-${config.helpers ? "\n// ── Helpers ────────────────────────────────────────────\n\n" + config.helpers : ""}${config.state ? "\n// ── State ─────────────────────────────────────────────\n\n" + config.state : ""}
+
 // ── Session Management ──────────────────────────────────
 
 interface Session {
@@ -203,11 +236,11 @@ const sessions = new Map<string, Session>();
 
 function createToolServer(): McpServer {
   const server = new McpServer({
-    name: "${config.name}",
+    name: "${name}",
     version: "0.1.0",
   });
 
-${config.tools}
+  registerTools(server, storage);
 
   return server;
 }
@@ -243,7 +276,7 @@ const httpServer = createServer(async (req, res) => {
   if (req.method === "GET" && (url === "/" || url === "/index.html")) {
     if (hasCustomUI) {
       let html = readFileSync(resolve(uiDir, "index.html"), "utf-8");
-      const pathTag = "<script>window.__pinch_path=" + JSON.stringify(process.cwd()) + ";window.__pinch_name=" + JSON.stringify("${config.name}") + ";</script>";
+      const pathTag = "<script>window.__pinch_path=" + JSON.stringify(process.cwd()) + ";window.__pinch_name=" + JSON.stringify("${name}") + ";</script>";
       html = html.replace("</head>", bridgeScript + "\\n" + pathTag + "\\n</head>");
       res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
       res.end(html);
@@ -280,7 +313,7 @@ const httpServer = createServer(async (req, res) => {
 
 const PORT = process.env.PORT || 3100;
 httpServer.listen(PORT, () => {
-  console.log(\`⚡ ${config.name} running on http://localhost:\${PORT}\`);
+  console.log(\`⚡ ${name} running on http://localhost:\${PORT}\`);
   if (hasCustomUI) {
     console.log(\`   Custom UI: http://localhost:\${PORT}\`);
   } else {
@@ -288,5 +321,155 @@ httpServer.listen(PORT, () => {
   }
   console.log(\`   MCP endpoint: http://localhost:\${PORT}/mcp\`);
 });
+`;
+}
+
+// ── Shared scaffolding helpers ──────────────────────────
+
+/** Common package.json for all templates */
+export function getPackageJson(slug: string, description: string): string {
+  return JSON.stringify(
+    {
+      name: slug,
+      version: "0.1.0",
+      description,
+      type: "module",
+      scripts: {
+        dev: "npx tsx --watch src/index.ts",
+        build: "tsc",
+        start: "node dist/index.js",
+      },
+      dependencies: {
+        "@modelcontextprotocol/sdk": "^1.12.1",
+        agents: "^0.5.1",
+        zod: "^3.24.4",
+      },
+      devDependencies: {
+        typescript: "^5.8.3",
+        tsx: "^4.19.0",
+        "@types/node": "^22.15.0",
+        wrangler: "^3.105.0",
+        "@cloudflare/workers-types": "^4.20250130.0",
+      },
+    },
+    null,
+    2
+  );
+}
+
+/** Common tsconfig.json for all templates */
+export function getTsConfig(): string {
+  return JSON.stringify(
+    {
+      compilerOptions: {
+        target: "ES2022",
+        module: "NodeNext",
+        moduleResolution: "NodeNext",
+        outDir: "./dist",
+        rootDir: "./src",
+        declaration: true,
+        strict: true,
+        esModuleInterop: true,
+        skipLibCheck: true,
+      },
+      include: ["src/**/*"],
+      exclude: ["src/_worker.ts"],
+    },
+    null,
+    2
+  );
+}
+
+/** Common .gitignore for all templates */
+export function getGitignore(): string {
+  return `node_modules/
+dist/
+.env
+.pinch-data.json
+src/_worker.ts
+.wrangler/
+`;
+}
+
+/** Common .env.example for all templates */
+export function getEnvExample(): string {
+  return `# Cloudflare Workers deployment (pinch deploy)
+# Get these from: https://dash.cloudflare.com
+CLOUDFLARE_API_TOKEN=
+CLOUDFLARE_ACCOUNT_ID=
+
+# Optional: override the default port for local dev
+# PORT=3100
+`;
+}
+
+/** Common README.md for all templates */
+export function getReadme(name: string, slug: string, description: string): string {
+  return `# ${name}
+
+${description}
+
+An MCP (Model Context Protocol) server built with [pinch](https://github.com/AndrewLeonardi/pinch-cli).
+
+## Quick Start
+
+\\\`\\\`\\\`bash
+pinch dev          # Start dev server + playground
+pinch test         # Validate everything works
+pinch deploy       # Deploy to Cloudflare Workers
+\\\`\\\`\\\`
+
+## Project Structure
+
+\\\`\\\`\\\`
+${slug}/
+  src/
+    tools.ts       <- Your tool definitions (edit this!)
+    index.ts       <- Dev server (auto-generated)
+  wrangler.toml    <- Cloudflare Workers config
+  pinch.toml       <- Tool manifest
+\\\`\\\`\\\`
+
+## Adding Tools
+
+Edit \\\`src/tools.ts\\\` to add new tools:
+
+\\\`\\\`\\\`typescript
+server.tool(
+  "my_tool",
+  "Description of what it does",
+  { input: z.string() },
+  async ({ input }) => ({
+    content: [{ type: "text", text: \\\\\\\`Result: \\\\\\\${input}\\\\\\\` }],
+  })
+);
+\\\`\\\`\\\`
+
+## Deployment
+
+### Cloudflare Workers (recommended)
+
+\\\`\\\`\\\`bash
+# Set your credentials (one-time)
+export CLOUDFLARE_API_TOKEN=your_token
+export CLOUDFLARE_ACCOUNT_ID=your_account_id
+
+# Deploy
+pinch deploy
+\\\`\\\`\\\`
+
+### Docker
+
+\\\`\\\`\\\`bash
+pinch deploy docker
+docker compose up
+\\\`\\\`\\\`
+
+### Pinchers.ai Marketplace
+
+\\\`\\\`\\\`bash
+pinch login
+pinch deploy pinchers
+\\\`\\\`\\\`
 `;
 }

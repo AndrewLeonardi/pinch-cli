@@ -1,5 +1,6 @@
 import { getPlaygroundHtml } from "./playground.js";
-import { generateServerCode } from "./server-runtime.js";
+import { generateToolsFile, generateDevServer, getPackageJson, getTsConfig, getGitignore, getEnvExample, getReadme } from "./server-runtime.js";
+import { generateWranglerConfig } from "../lib/worker-gen.js";
 
 export function automationTemplate(
   name: string,
@@ -33,8 +34,7 @@ input = {}
 expect_type = "json"
 `;
 
-  const serverCode = generateServerCode({
-    name,
+  const toolsCode = generateToolsFile({
     helpers: `function generateId(prefix: string): string {
   const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
   let id = prefix + "_";
@@ -93,7 +93,7 @@ const tasks = new Map<string, Task>();`,
       tasks.set(task.id, task);
 
       return jsonResult({
-        message: \\\`Task created: "\\\${title}"\\\`,
+        message: \`Task created: "\${title}"\`,
         task,
         tip: "Use list_tasks to see all tasks, or complete_task to mark this done.",
       });
@@ -148,13 +148,13 @@ const tasks = new Map<string, Task>();`,
       if (!task) {
         const available = Array.from(tasks.keys());
         return jsonResult({
-          error: \\\`Task "\\\${task_id}" not found\\\`,
+          error: \`Task "\${task_id}" not found\`,
           available_tasks: available.length > 0 ? available : "No tasks created yet. Use create_task first.",
         });
       }
 
       if (task.status === "done") {
-        return textResult(\\\`Task "\\\${task.title}" is already completed.\\\`);
+        return textResult(\`Task "\${task.title}" is already completed.\`);
       }
 
       task.status = "done";
@@ -163,7 +163,7 @@ const tasks = new Map<string, Task>();`,
       const remaining = Array.from(tasks.values()).filter((t) => t.status !== "done").length;
 
       return jsonResult({
-        message: \\\`✓ Completed: "\\\${task.title}"\\\`,
+        message: \`✓ Completed: "\${task.title}"\`,
         task,
         remaining_tasks: remaining,
       });
@@ -171,56 +171,16 @@ const tasks = new Map<string, Task>();`,
   );`,
   });
 
-  const pkg = JSON.stringify(
-    {
-      name: slug,
-      version: "0.1.0",
-      description,
-      type: "module",
-      scripts: {
-        dev: "npx tsx --watch src/index.ts",
-        build: "tsc",
-        start: "node dist/index.js",
-      },
-      dependencies: {
-        "@modelcontextprotocol/sdk": "^1.12.1",
-        zod: "^3.24.4",
-      },
-      devDependencies: {
-        typescript: "^5.8.3",
-        tsx: "^4.19.0",
-        "@types/node": "^22.15.0",
-      },
-    },
-    null,
-    2
-  );
-
-  const tsconfig = JSON.stringify(
-    {
-      compilerOptions: {
-        target: "ES2022",
-        module: "NodeNext",
-        moduleResolution: "NodeNext",
-        outDir: "./dist",
-        rootDir: "./src",
-        declaration: true,
-        strict: true,
-        esModuleInterop: true,
-        skipLibCheck: true,
-      },
-      include: ["src/**/*"],
-    },
-    null,
-    2
-  );
-
   return {
     "pinch.toml": manifest,
-    "src/index.ts": serverCode,
+    "src/tools.ts": toolsCode,
+    "src/index.ts": generateDevServer(name),
+    "wrangler.toml": generateWranglerConfig(slug, name),
     "public/playground.html": getPlaygroundHtml(name, description),
-    "package.json": pkg,
-    "tsconfig.json": tsconfig,
-    ".gitignore": "node_modules/\\ndist/\\n.env\\n.pinch-data.json\\n",
+    "package.json": getPackageJson(slug, description),
+    "tsconfig.json": getTsConfig(),
+    ".gitignore": getGitignore(),
+    ".env.example": getEnvExample(),
+    "README.md": getReadme(name, slug, description),
   };
 }

@@ -1,8 +1,9 @@
 import { writeFile, mkdir } from "fs/promises";
 import { existsSync } from "fs";
 import { join, dirname } from "path";
+import { spawn } from "child_process";
 import chalk from "chalk";
-import { input, select, confirm } from "@inquirer/prompts";
+import { input, select } from "@inquirer/prompts";
 import { TEMPLATES, templateGenerators } from "../templates/index.js";
 
 export async function initCommand(nameArg?: string) {
@@ -89,14 +90,45 @@ export async function initCommand(nameArg?: string) {
     console.log(`  ${chalk.dim(prefix)} ${paths[i]}`);
   }
 
+  // Auto npm install
+  console.log(chalk.dim(`\n  Installing dependencies...`));
+
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const child = spawn("npm", ["install"], {
+        cwd: dir,
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+
+      let stderr = "";
+      child.stderr?.on("data", (data: Buffer) => {
+        stderr += data.toString();
+      });
+
+      child.on("close", (code) => {
+        if (code === 0) {
+          resolve();
+        } else {
+          reject(new Error(stderr || `npm install exited with code ${code}`));
+        }
+      });
+
+      child.on("error", reject);
+    });
+
+    console.log(chalk.green("  ✓ Dependencies installed"));
+  } catch (err) {
+    console.log(chalk.yellow("  ⚠ npm install failed — run it manually:"));
+    console.log(chalk.dim(`    cd ${slug} && npm install\n`));
+  }
+
   // Next steps
   console.log(`\n  ${chalk.bold("Get started:")}`);
   console.log(`    ${chalk.cyan("cd " + slug)}`);
-  console.log(`    ${chalk.cyan("npm install")}`);
   console.log(`    ${chalk.cyan("pinch dev")}          ${chalk.dim("# start dev server + playground")}`);
   console.log();
   console.log(`  ${chalk.bold("When you're ready to ship:")}`);
   console.log(`    ${chalk.cyan("pinch test")}         ${chalk.dim("# validate everything works")}`);
-  console.log(`    ${chalk.cyan("pinch deploy")}       ${chalk.dim("# deploy to Cloudflare, Docker, or Pinchers.ai")}`);
+  console.log(`    ${chalk.cyan("pinch deploy")}       ${chalk.dim("# deploy to Cloudflare Workers (pre-configured!)")}`);
   console.log();
 }
