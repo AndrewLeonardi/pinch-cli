@@ -53,7 +53,7 @@ function startRepl(endpoint: string, initialVerbose: boolean) {
   console.log(chalk.dim("    quit") + "              Stop and exit\n");
 
   const prompt = () =>
-    rl.question(chalk.red("🦞 ") + chalk.dim("pinch> "), async (line) => {
+    rl.question(chalk.bold("⚡ ") + chalk.dim("pinch> "), async (line) => {
       const trimmed = line.trim();
       if (!trimmed) return prompt();
 
@@ -321,8 +321,7 @@ export async function devCommand(options: {
   // Endpoint-only mode: connect to external MCP server
   if (options.endpoint) {
     console.log(
-      chalk.red("🦞") +
-        chalk.bold(" pinch dev") +
+      chalk.bold("  ⚡ pinch dev") +
         chalk.dim(" — connected to external server")
     );
     console.log(chalk.dim(`  Endpoint: ${options.endpoint}\n`));
@@ -334,7 +333,7 @@ export async function devCommand(options: {
   const manifest = await loadManifest();
   if (!manifest) {
     console.log(
-      chalk.red("\n  No pinchers.toml found. Run `pinch init` first.")
+      chalk.red("\n  No pinch.toml found. Run `pinch init` first.")
     );
     console.log(
       chalk.dim("  Or use ") +
@@ -354,7 +353,7 @@ export async function devCommand(options: {
 
   const customUI = hasCustomUI();
   console.log(
-    chalk.red("🦞") + chalk.bold(` pinch dev`) + ` — ${manifest.tool.name}`
+    chalk.bold(`\n  ⚡ pinch dev`) + chalk.dim(` — ${manifest.tool.name}`)
   );
   if (customUI) {
     console.log(chalk.cyan("  ✦ Custom UI detected") + chalk.dim(" (ui/index.html)"));
@@ -380,7 +379,7 @@ export async function devCommand(options: {
         browserOpened = true;
         const playgroundUrl = `http://localhost:${port}`;
         console.log(
-          chalk.bold("\n  🦞 Playground open at ") +
+          chalk.bold("\n  ⚡ Playground open at ") +
             chalk.cyan(playgroundUrl) +
             "\n"
         );

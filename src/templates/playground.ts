@@ -7,7 +7,7 @@
  * - Generates forms from inputSchema
  * - Calls tools and renders pretty JSON output
  * - Connection status indicator with auto-retry
- * - Pinchers design system (lobster red, DM Sans, rounded cards)
+ * - Clean design system (DM Sans, rounded cards)
  */
 
 export function getPlaygroundHtml(name: string, description: string): string {
@@ -464,7 +464,7 @@ export function getPlaygroundHtml(name: string, description: string): string {
 
     <!-- Footer -->
     <div class="footer">
-      Built with <a href="https://pinchers.ai" target="_blank">Pinchers.ai</a>
+      Built with <a href="https://github.com/AndrewLeonardi/pinch-cli" target="_blank">pinch</a>
     </div>
   </div>
 

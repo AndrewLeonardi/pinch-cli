@@ -3,12 +3,12 @@ import open from "open";
 import { loadConfig, saveConfig, getPlatformUrl } from "../lib/config.js";
 
 export async function loginCommand() {
-  console.log(chalk.red("🦞") + chalk.bold(" pinch login") + " — authenticate with Pinchers.ai\n");
+  console.log(chalk.bold("\n  ⚡ pinch login") + chalk.dim(" — authenticate with Pinchers.ai\n"));
 
   const config = await loadConfig();
   if (config.api_key) {
     console.log(chalk.dim("  Already logged in as ") + chalk.cyan(config.email || "unknown"));
-    console.log(chalk.dim("  To re-authenticate, delete ~/.pinchersrc and run again.\n"));
+    console.log(chalk.dim("  To re-authenticate, delete ~/.pinchrc and run again.\n"));
     return;
   }
 
@@ -48,7 +48,7 @@ export async function loginCommand() {
         await saveConfig({ api_key: json.api_key, email: json.email });
         console.log(chalk.green(`\n  ✓ Logged in as ${json.email}`));
         console.log(chalk.dim(`  API key: ${json.key_prefix}...`));
-        console.log(chalk.dim("  Saved to ~/.pinchersrc\n"));
+        console.log(chalk.dim("  Saved to ~/.pinchrc\n"));
         return;
       }
       if (res.status === 202) {

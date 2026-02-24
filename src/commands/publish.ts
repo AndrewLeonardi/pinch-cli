@@ -28,7 +28,8 @@ async function bundleUIDirectory(): Promise<Record<string, string> | null> {
 }
 
 export async function publishCommand() {
-  console.log(chalk.red("🦞") + chalk.bold(" pinch publish") + " — submit to Pinchers.ai\n");
+  console.log(chalk.bold("\n  ⚡ pinch publish") + chalk.dim(" — submit to Pinchers.ai"));
+  console.log(chalk.dim("  (Tip: use `pinch deploy` for more deployment options)\n"));
 
   // Check auth
   const config = await loadConfig();
@@ -41,7 +42,7 @@ export async function publishCommand() {
   // Check manifest
   const manifest = await loadManifest();
   if (!manifest) {
-    console.log(chalk.red("  No pinchers.toml found. Run `pinch init` first.\n"));
+    console.log(chalk.red("  No pinch.toml found. Run `pinch init` first.\n"));
     process.exit(1);
   }
 

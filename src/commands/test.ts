@@ -278,12 +278,12 @@ async function runUserTests(endpoint: string, testCases: TestCase[], discoveredT
 // ── Main command ────────────────────────────────────────
 
 export async function testCommand(options: { port: string }) {
-  console.log(chalk.red("🦞") + chalk.bold(" pinch test") + " — validate and test your Pincher\n");
+  console.log(chalk.bold("\n  ⚡ pinch test") + chalk.dim(" — validate and test your MCP server\n"));
 
   const manifest = await loadManifest();
 
   // Phase 0: Check manifest exists
-  check("pinchers.toml exists", manifest !== null, "Run `pinch init` to create one");
+  check("pinch.toml exists", manifest !== null, "Run `pinch init` to create one");
 
   if (!manifest) {
     console.log(chalk.red(`\n  ${failed} failed, ${passed} passed\n`));
@@ -353,7 +353,7 @@ export async function testCommand(options: { port: string }) {
     if (testCases.length > 0) {
       await runUserTests(endpoint, testCases, discoveredTools);
     } else {
-      console.log(chalk.dim("\n  No [[test]] cases in pinchers.toml — add some for custom assertions."));
+      console.log(chalk.dim("\n  No [[test]] cases in pinch.toml — add some for custom assertions."));
     }
   } finally {
     if (child) {

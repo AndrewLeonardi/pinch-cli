@@ -4,12 +4,22 @@ import { homedir } from "os";
 import { join, resolve } from "path";
 import * as toml from "toml";
 
-const RC_PATH = join(homedir(), ".pinchersrc");
-const PLATFORM_URL = process.env.PINCHERS_URL || "https://pinchers.ai";
+// ── RC file paths (new + legacy) ──────────────────────
+const RC_PATH = join(homedir(), ".pinchrc");
+const LEGACY_RC_PATH = join(homedir(), ".pinchersrc");
 
-export interface PinchersConfig {
+// ── Platform URLs ─────────────────────────────────────
+const PINCHERS_URL = process.env.PINCHERS_URL || "https://pinchers.ai";
+
+export type DeployTarget = "cloudflare" | "docker" | "pinchers";
+
+export interface PinchConfig {
+  /** API key for Pinchers.ai marketplace (optional — only needed for `deploy pinchers`) */
   api_key?: string;
   email?: string;
+  /** Cloudflare API token (optional — only needed for `deploy cloudflare`) */
+  cf_api_token?: string;
+  cf_account_id?: string;
 }
 
 export interface TestCase {
@@ -20,7 +30,7 @@ export interface TestCase {
   expect_not_contains?: string;
 }
 
-export interface PinchersManifest {
+export interface PinchManifest {
   tool: {
     name: string;
     slug: string;
@@ -45,30 +55,67 @@ export interface PinchersManifest {
       entry?: string;
     };
   };
+  deploy?: {
+    target?: DeployTarget;
+    /** Cloudflare Worker name (defaults to slug) */
+    worker_name?: string;
+    /** Docker image name (defaults to slug) */
+    image_name?: string;
+  };
   test?: TestCase[];
 }
 
+// Legacy type aliases for backward compatibility
+export type PinchersConfig = PinchConfig;
+export type PinchersManifest = PinchManifest;
+
 export function getPlatformUrl(): string {
-  return PLATFORM_URL;
+  return PINCHERS_URL;
 }
 
-export async function loadConfig(): Promise<PinchersConfig> {
-  if (!existsSync(RC_PATH)) return {};
-  const raw = await readFile(RC_PATH, "utf-8");
+/**
+ * Load config from ~/.pinchrc (falls back to legacy ~/.pinchersrc)
+ */
+export async function loadConfig(): Promise<PinchConfig> {
+  // Try new path first, then legacy
+  const path = existsSync(RC_PATH) ? RC_PATH : LEGACY_RC_PATH;
+  if (!existsSync(path)) return {};
+  const raw = await readFile(path, "utf-8");
   return JSON.parse(raw);
 }
 
-export async function saveConfig(config: PinchersConfig): Promise<void> {
+/**
+ * Save config to ~/.pinchrc
+ */
+export async function saveConfig(config: PinchConfig): Promise<void> {
   await writeFile(RC_PATH, JSON.stringify(config, null, 2), "utf-8");
 }
 
-export async function loadManifest(dir?: string): Promise<PinchersManifest | null> {
-  const manifestPath = resolve(dir || process.cwd(), "pinchers.toml");
-  if (!existsSync(manifestPath)) return null;
-  const raw = await readFile(manifestPath, "utf-8");
-  return toml.parse(raw) as PinchersManifest;
+export function getConfigPath(): string {
+  if (existsSync(RC_PATH)) return RC_PATH;
+  if (existsSync(LEGACY_RC_PATH)) return LEGACY_RC_PATH;
+  return RC_PATH; // default for new installs
 }
 
-export function getApiKey(config: PinchersConfig): string | null {
+/**
+ * Load manifest from pinch.toml (falls back to legacy pinchers.toml)
+ */
+export async function loadManifest(dir?: string): Promise<PinchManifest | null> {
+  const base = dir || process.cwd();
+  const newPath = resolve(base, "pinch.toml");
+  const legacyPath = resolve(base, "pinchers.toml");
+
+  const manifestPath = existsSync(newPath)
+    ? newPath
+    : existsSync(legacyPath)
+    ? legacyPath
+    : null;
+
+  if (!manifestPath) return null;
+  const raw = await readFile(manifestPath, "utf-8");
+  return toml.parse(raw) as PinchManifest;
+}
+
+export function getApiKey(config: PinchConfig): string | null {
   return config.api_key || null;
 }

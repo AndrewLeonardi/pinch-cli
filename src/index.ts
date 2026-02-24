@@ -6,17 +6,26 @@ import { devCommand } from "./commands/dev.js";
 import { testCommand } from "./commands/test.js";
 import { loginCommand } from "./commands/login.js";
 import { publishCommand } from "./commands/publish.js";
+import { deployCommand } from "./commands/deploy.js";
 
 const program = new Command();
 
 program
   .name("pinch")
-  .description(chalk.red("🦞") + " Build, test, and publish MCP tools for Pinchers.ai")
-  .version("0.1.0");
+  .description(
+    chalk.bold("⚡ pinch") +
+      chalk.dim(" — the fastest way to build MCP servers\n\n") +
+      "  Build, test, and deploy MCP (Model Context Protocol) servers.\n" +
+      "  Your AI tools, deployed anywhere.\n\n" +
+      chalk.dim("  Docs: https://github.com/AndrewLeonardi/pinch-cli")
+  )
+  .version("0.2.0");
+
+// ── Core commands ─────────────────────────────────────────
 
 program
   .command("init")
-  .description("Scaffold a new MCP server project")
+  .description("Create a new MCP server project")
   .argument("[name]", "project name")
   .action(initCommand);
 
@@ -35,14 +44,25 @@ program
   .option("-p, --port <port>", "port for test server", "3199")
   .action(testCommand);
 
+// ── Deploy commands ───────────────────────────────────────
+
+program
+  .command("deploy")
+  .description("Deploy your MCP server (Cloudflare, Docker, or Pinchers.ai)")
+  .argument("[target]", "deployment target: cloudflare, docker, or pinchers")
+  .option("--setup", "configure credentials for the target")
+  .action(deployCommand);
+
+// ── Pinchers.ai specific ─────────────────────────────────
+
 program
   .command("login")
-  .description("Authenticate with Pinchers.ai")
+  .description("Authenticate with Pinchers.ai marketplace")
   .action(loginCommand);
 
 program
   .command("publish")
-  .description("Submit your tool to Pinchers.ai for review")
+  .description("Submit to Pinchers.ai (alias for deploy pinchers)")
   .action(publishCommand);
 
 program.parse();

@@ -1,9 +1,9 @@
 /**
  * Shared server runtime generator.
  *
- * Every Pinchers tool gets the same infrastructure:
+ * Every pinch project gets the same infrastructure:
  *   - Multi-session MCP support (no "Server already initialized" on refresh)
- *   - Bridge injection (window.pinchers.callTool / listTools / theme)
+ *   - Bridge injection (window.pinch.callTool / listTools / theme)
  *   - Auto-detection of ui/ directory for custom frontends
  *   - Static file serving with proper MIME types
  *   - Fallback to auto-generated playground when no custom UI exists
@@ -47,11 +47,11 @@ const playgroundHtml = (() => {
   }
 })();
 
-// ── Pinchers Bridge ─────────────────────────────────────
-// Auto-injected into custom UI. Provides window.pinchers with:
+// ── Bridge ──────────────────────────────────────────────
+// Auto-injected into custom UI. Provides window.pinch with:
 //   callTool(name, args)  — call any MCP tool
 //   listTools()           — discover available tools
-//   theme                 — Pinchers design tokens
+//   theme                 — design tokens
 //   ready                 — Promise that resolves when connected
 
 const bridgeScript = \`<script>
@@ -84,14 +84,14 @@ const bridgeScript = \`<script>
     await _mcpCall("initialize", {
       protocolVersion: "2025-03-26",
       capabilities: {},
-      clientInfo: { name: "pinchers-ui", version: "1.0.0" }
+      clientInfo: { name: "pinch-ui", version: "1.0.0" }
     });
     var nh = { "Content-Type": "application/json", "Accept": "text/event-stream, application/json" };
     if (_sessionId) nh["Mcp-Session-Id"] = _sessionId;
     fetch("/mcp", { method: "POST", headers: nh, body: JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized", params: {} }) });
   }
 
-  window.pinchers = {
+  var api = {
     callTool: async function(toolName, args) {
       await _ensureSession();
       var result = await _mcpCall("tools/call", { name: toolName, arguments: args || {} });
@@ -107,7 +107,7 @@ const bridgeScript = \`<script>
     },
     theme: {
       colors: {
-        lobsterRed: "#e8503a",
+        primary: "#e8503a",
         bg: "#f0ece4",
         bgCard: "#ffffff",
         border: "#d9d3c7",
@@ -122,13 +122,20 @@ const bridgeScript = \`<script>
     saveArtifact: async function(opts) {
       if (!opts || !opts.data) throw new Error("saveArtifact requires { data }");
       var artifactId = opts.id || "art_" + Math.random().toString(36).slice(2, 10);
-      console.log("[pinchers] saveArtifact (local dev):", artifactId, opts.label || "");
-      return { id: artifactId, url: "/p/" + artifactId + " (available after publish)" };
+      console.log("[pinch] saveArtifact (local dev):", artifactId, opts.label || "");
+      return { id: artifactId, url: "/p/" + artifactId + " (available after deploy)" };
     },
     ready: _ensureSession().then(function() {
+      document.dispatchEvent(new Event("pinch:ready"));
+      // Backward compat event
       document.dispatchEvent(new Event("pinchers:ready"));
     })
   };
+
+  // Primary API
+  window.pinch = api;
+  // Backward compatibility alias
+  window.pinchers = api;
 })();
 </script>\`;
 
@@ -149,11 +156,11 @@ const MIME: Record<string, string> = {
   ".ico": "image/x-icon",
 };
 
-// @pinchers-storage-start
+// @pinch-storage-start
 // Persistent key-value storage.
-// Local dev: backed by .pinchers-data.json in the project root.
+// Local dev: backed by .pinch-data.json in the project root.
 // Production (CF Worker): automatically swapped with Cloudflare KV.
-const _storageFile = resolve(__dirname, "../.pinchers-data.json");
+const _storageFile = resolve(__dirname, "../.pinch-data.json");
 const storage = {
   async get(key: string): Promise<any> {
     try {
@@ -181,7 +188,7 @@ const storage = {
     } catch { return []; }
   }
 };
-// @pinchers-storage-end
+// @pinch-storage-end
 ${config.helpers ? "\n// ── Helpers ────────────────────────────────────────────\n\n" + config.helpers : ""}${config.state ? "\n// ── State ─────────────────────────────────────────────\n\n" + config.state : ""}
 // ── Session Management ──────────────────────────────────
 
@@ -234,7 +241,7 @@ const httpServer = createServer(async (req, res) => {
   if (req.method === "GET" && (url === "/" || url === "/index.html")) {
     if (hasCustomUI) {
       let html = readFileSync(resolve(uiDir, "index.html"), "utf-8");
-      const pathTag = "<script>window.__pinchers_path=" + JSON.stringify(process.cwd()) + ";window.__pinchers_name=" + JSON.stringify("${config.name}") + ";</script>";
+      const pathTag = "<script>window.__pinch_path=" + JSON.stringify(process.cwd()) + ";window.__pinch_name=" + JSON.stringify("${config.name}") + ";</script>";
       html = html.replace("</head>", bridgeScript + "\\n" + pathTag + "\\n</head>");
       res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
       res.end(html);
@@ -271,7 +278,7 @@ const httpServer = createServer(async (req, res) => {
 
 const PORT = process.env.PORT || 3100;
 httpServer.listen(PORT, () => {
-  console.log(\`🦞 ${config.name} running on http://localhost:\${PORT}\`);
+  console.log(\`⚡ ${config.name} running on http://localhost:\${PORT}\`);
   if (hasCustomUI) {
     console.log(\`   Custom UI: http://localhost:\${PORT}\`);
   } else {

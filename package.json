@@ -1,13 +1,35 @@
 {
-  "name": "@pinchers/cli",
-  "version": "0.1.0",
-  "description": "Build, test, and publish MCP tools for Pinchers.ai",
+  "name": "pinch-cli",
+  "version": "0.2.0",
+  "description": "The fastest way to build, test, and deploy MCP servers. Open source CLI for the Model Context Protocol.",
   "bin": { "pinch": "./dist/index.js" },
   "type": "module",
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
     "start": "node dist/index.js"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "ai",
+    "ai-tools",
+    "mcp-server",
+    "llm",
+    "agents",
+    "claude",
+    "openai",
+    "chatgpt",
+    "developer-tools",
+    "cli"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/AndrewLeonardi/pinch-cli.git"
+  },
+  "homepage": "https://github.com/AndrewLeonardi/pinch-cli#readme",
+  "bugs": {
+    "url": "https://github.com/AndrewLeonardi/pinch-cli/issues"
   },
   "dependencies": {
     "chalk": "^5.4.1",

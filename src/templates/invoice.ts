@@ -196,11 +196,11 @@ const currencySchema = z
   );
 
   return {
-    "pinchers.toml": manifest,
+    "pinch.toml": manifest,
     "src/index.ts": serverCode,
     "public/playground.html": getPlaygroundHtml(name, description),
     "package.json": pkg,
     "tsconfig.json": tsconfig,
-    ".gitignore": "node_modules/\\ndist/\\n.env\\n",
+    ".gitignore": "node_modules/\\ndist/\\n.env\\n.pinch-data.json\\n",
   };
 }

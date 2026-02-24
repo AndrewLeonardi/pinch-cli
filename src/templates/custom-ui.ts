@@ -43,7 +43,7 @@ expect_contains = "items"
     tools: `  // ─── YOUR TOOLS ─────────────────────────────────────────
   //
   // Each server.tool() creates an MCP endpoint.
-  // Your UI calls them via: window.pinchers.callTool("tool_name", { arg: value })
+  // Your UI calls them via: window.pinch.callTool("tool_name", { arg: value })
   //
   // PATTERN:
   //   server.tool(
@@ -61,7 +61,7 @@ expect_contains = "items"
   //   await storage.delete("key")     -> removes a key
   //   await storage.keys("prefix")    -> list all keys (optionally by prefix)
   //
-  // Locally this saves to .pinchers-data.json.
+  // Locally this saves to .pinch-data.json.
   // In production it uses Cloudflare KV automatically.
 
   // ── Example: save an item ──────────────────────────────
@@ -147,12 +147,12 @@ expect_contains = "items"
       <div class="welcome-hero">
         <span class="welcome-emoji">\u{1F99E}</span>
         <div>
-          <h2 class="welcome-title">Your Pincher is ready!</h2>
+          <h2 class="welcome-title">Your MCP server is ready!</h2>
           <p class="welcome-subtitle">${description}</p>
         </div>
       </div>
 
-      <p class="welcome-text">A <strong>Pincher</strong> is a mini web app that anyone can use right in their browser \u2014 no downloads, no installs needed.</p>
+      <p class="welcome-text">An <strong>MCP server</strong> is a tool that AI assistants can discover and use automatically \u2014 you build the logic, AI agents call it.</p>
 
       <div class="welcome-parts">
         <div class="welcome-part">
@@ -223,7 +223,7 @@ expect_contains = "items"
           </div>
           <div class="ai-step">
             <span class="step-num">4</span>
-            <span>Happy with it? Run <code>pinch login</code> then <code>pinch publish</code> to go live</span>
+            <span>Happy with it? Run <code>pinch test</code> then <code>pinch deploy</code> to go live</span>
           </div>
         </div>
       </div>
@@ -245,7 +245,7 @@ expect_contains = "items"
             <strong>Build your UI</strong>
             <p>Edit <code>ui/index.html</code> and <code>ui/styles.css</code>.
                Call your tools from JavaScript with:</p>
-            <pre>const result = await window.pinchers.callTool("your_tool", { arg: "value" });</pre>
+            <pre>const result = await window.pinch.callTool("your_tool", { arg: "value" });</pre>
           </div>
         </div>
 
@@ -262,9 +262,9 @@ const data = await storage.get("mydata");</pre>
         <div class="step">
           <span class="step-num">4</span>
           <div>
-            <strong>Publish to Pinchers</strong>
-            <p>When you're happy, run <code>pinch login</code> then <code>pinch publish</code>
-               to submit it to the marketplace.</p>
+            <strong>Deploy your server</strong>
+            <p>When you're happy, run <code>pinch deploy</code>
+               to ship it to Cloudflare, Docker, or the Pinchers.ai marketplace.</p>
           </div>
         </div>
 
@@ -272,19 +272,19 @@ const data = await storage.get("mydata");</pre>
           <summary>API Reference</summary>
           <div class="api-ref">
             <div class="api-item">
-              <code>await window.pinchers.callTool(name, args)</code>
+              <code>await window.pinch.callTool(name, args)</code>
               <span>Call an MCP tool and get the result</span>
             </div>
             <div class="api-item">
-              <code>await window.pinchers.listTools()</code>
+              <code>await window.pinch.listTools()</code>
               <span>Discover all available tools + their input schemas</span>
             </div>
             <div class="api-item">
-              <code>window.pinchers.ready</code>
+              <code>window.pinch.ready</code>
               <span>Promise \u2014 resolves when the MCP connection is established</span>
             </div>
             <div class="api-item">
-              <code>window.pinchers.theme</code>
+              <code>window.pinch.theme</code>
               <span>Pinchers design tokens (colors, fonts)</span>
             </div>
           </div>
@@ -299,16 +299,16 @@ const data = await storage.get("mydata");</pre>
       document.getElementById("status").textContent = "Connected";
       document.getElementById("status").classList.add("connected");
     }
-    if (window.pinchers && window.pinchers.ready) {
-      window.pinchers.ready.then(markConnected).catch(function() {});
+    if (window.pinchers && window.pinch.ready) {
+      window.pinch.ready.then(markConnected).catch(function() {});
     }
-    document.addEventListener("pinchers:ready", markConnected);
+    document.addEventListener("pinch:ready", markConnected);
 
     // \u2500\u2500 Auto-fill project path \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
     (function() {
       var pathEl = document.getElementById("project-path");
-      if (window.__pinchers_path) {
-        pathEl.value = window.__pinchers_path;
+      if (window.__pinch_path) {
+        pathEl.value = window.__pinch_path;
       } else {
         pathEl.value = "(path will auto-fill when server starts)";
       }
@@ -334,7 +334,7 @@ const data = await storage.get("mydata");</pre>
         return;
       }
 
-      var prompt = "I'm building a Pinchers.ai MCP tool. Here's the project and all the APIs you need:\\n\\n" +
+      var prompt = "I'm building an MCP server with pinch CLI. Here's the project and all the APIs you need:\\n\\n" +
         "PROJECT: " + document.title + "\\n" +
         "PATH: " + path + "\\n\\n" +
         "WHAT I WANT TO BUILD:\\n" + desc + "\\n\\n" +
@@ -342,7 +342,7 @@ const data = await storage.get("mydata");</pre>
         "- src/index.ts \\u2014 Backend tool handlers (this is where your tool logic goes)\\n" +
         "- ui/index.html \\u2014 Frontend UI (what users see)\\n" +
         "- ui/styles.css \\u2014 Styles (how it looks)\\n" +
-        "- pinchers.toml \\u2014 Tool config (update name and description to match)\\n\\n" +
+        "- pinch.toml \\u2014 Tool config (update name and description to match)\\n\\n" +
         "BACKEND API (src/index.ts):\\n" +
         "Each tool is defined with server.tool(name, description, zodSchema, handler).\\n" +
         "Return format: { content: [{ type: \\"text\\", text: JSON.stringify(result) }] }\\n" +
@@ -354,17 +354,17 @@ const data = await storage.get("mydata");</pre>
         "await storage.delete(\\"key\\")     \\u2192 removes a key\\n" +
         "await storage.keys(\\"prefix\\")    \\u2192 list keys\\n\\n" +
         "FRONTEND API (ui/index.html \\u2014 bridge is auto-injected, just use it):\\n" +
-        "await window.pinchers.callTool(\\"tool_name\\", { arg: \\"value\\" }) \\u2192 calls a backend tool\\n" +
-        "await window.pinchers.listTools() \\u2192 discover available tools\\n" +
-        "window.pinchers.ready \\u2192 promise, resolves when connected\\n" +
-        "window.pinchers.theme.colors \\u2192 { lobsterRed, bg, bgCard, border, textPrimary, textSecondary }\\n" +
-        "window.pinchers.theme.fonts \\u2192 { sans, mono }\\n\\n" +
+        "await window.pinch.callTool(\\"tool_name\\", { arg: \\"value\\" }) \\u2192 calls a backend tool\\n" +
+        "await window.pinch.listTools() \\u2192 discover available tools\\n" +
+        "window.pinch.ready \\u2192 promise, resolves when connected\\n" +
+        "window.pinch.theme.colors \\u2192 { primary, bg, bgCard, border, textPrimary, textSecondary }\\n" +
+        "window.pinch.theme.fonts \\u2192 { sans, mono }\\n\\n" +
         "DESIGN SYSTEM: DM Sans font, background #f0ece4, accent red #e8503a, border-radius 16px, borders #d9d3c7, cards white #ffffff.\\n\\n" +
         "IMPORTANT:\\n" +
         "- Replace ALL the example tools in src/index.ts with the real ones for this tool\\n" +
         "- Build a complete, polished UI in ui/index.html + ui/styles.css\\n" +
         "- The dev server has hot-reload \\u2014 just save files and refresh the browser\\n" +
-        "- Update pinchers.toml name and description to match the tool";
+        "- Update pinch.toml name and description to match the tool";
 
       navigator.clipboard.writeText(prompt).then(function() {
         var feedback = document.getElementById("copy-feedback");
@@ -385,7 +385,7 @@ const data = await storage.get("mydata");</pre>
 </body>
 </html>`;
 
-  const uiCss = `/* ── Pinchers Design System ────────────────────────── */
+  const uiCss = `/* ── Pinch Design System ──────────────────────────── */
 
 :root {
   --red: #e8503a;
@@ -783,7 +783,7 @@ ${slug}/
   src/index.ts        <- Your MCP tools (backend logic)
   ui/index.html       <- Your custom UI (frontend)
   ui/styles.css       <- Your styles
-  pinchers.toml       <- Tool manifest (name, pricing, category)
+  pinch.toml          <- Tool manifest (name, pricing, category)
   public/             <- Fallback playground (auto-generated)
 \`\`\`
 
@@ -838,41 +838,40 @@ it automatically uses Cloudflare KV — no changes needed.
 
 ### 3. Build your UI in \`ui/index.html\`
 
-The Pinchers bridge is auto-injected. Use it in your JavaScript:
+The bridge API is auto-injected. Use it in your JavaScript:
 
 \`\`\`javascript
 // Call a tool
-const result = await window.pinchers.callTool("my_tool", {
+const result = await window.pinch.callTool("my_tool", {
   input_field: "world",
   count: 3,
 });
 
 // List available tools (useful for debugging)
-const tools = await window.pinchers.listTools();
+const tools = await window.pinch.listTools();
 
 // Wait for connection before doing anything
-await window.pinchers.ready;
+await window.pinch.ready;
 
-// Access Pinchers design tokens
-const { lobsterRed, bg } = window.pinchers.theme.colors;
-const { sans, mono } = window.pinchers.theme.fonts;
+// Access design tokens
+const { primary, bg } = window.pinch.theme.colors;
+const { sans, mono } = window.pinch.theme.fonts;
 \`\`\`
 
 ### 4. Test locally
 
 \`\`\`bash
 npm run dev       # Start dev server with hot-reload
-pinch test        # Run automated tests from pinchers.toml
+pinch test        # Run automated tests from pinch.toml
 \`\`\`
 
 ### 5. Publish
 
 \`\`\`bash
-pinch login       # Authenticate with Pinchers
-pinch publish     # Submit for review
+pinch deploy       # Deploy to Cloudflare, Docker, or Pinchers.ai
 \`\`\`
 
-## Manifest Reference (\`pinchers.toml\`)
+## Manifest Reference (\`pinch.toml\`)
 
 \`\`\`toml
 [tool]
@@ -938,7 +937,7 @@ entry = "ui/index.html"    # Entry point
   );
 
   return {
-    "pinchers.toml": manifest,
+    "pinch.toml": manifest,
     "src/index.ts": serverCode,
     "ui/index.html": uiHtml,
     "ui/styles.css": uiCss,
@@ -946,6 +945,6 @@ entry = "ui/index.html"    # Entry point
     "package.json": pkg,
     "tsconfig.json": tsconfig,
     "README.md": readme,
-    ".gitignore": "node_modules/\ndist/\n.env\n.pinchers-data.json\n",
+    ".gitignore": "node_modules/\ndist/\n.env\n.pinch-data.json\n",
   };
 }
