@@ -1,0 +1,11 @@
+src/
+tests/
+.github/
+.gitignore
+tsconfig.json
+vitest.config.ts
+*.tgz
+coverage/
+.DS_Store
+.env
+.env.local

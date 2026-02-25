@@ -5,6 +5,7 @@ import { platform } from "os";
 import chalk from "chalk";
 import { loadManifest } from "../lib/config.js";
 import { createInterface } from "readline";
+import { createSession, initializeSession, mcpCall, type McpSession } from "../lib/mcp-client.js";
 
 function hasCustomUI(): boolean {
   return existsSync(resolve(process.cwd(), "ui/index.html"));
@@ -41,6 +42,7 @@ function prettyJson(obj: unknown): string {
 
 function startRepl(endpoint: string, initialVerbose: boolean) {
   let verboseMode = initialVerbose;
+  const session = createSession(endpoint);
 
   const rl = createInterface({ input: process.stdin, output: process.stdout });
 
@@ -89,28 +91,12 @@ function startRepl(endpoint: string, initialVerbose: boolean) {
       // ── list ─────────────────────────
       if (trimmed === "list") {
         try {
-          const body = { jsonrpc: "2.0", id: 1, method: "tools/list", params: {} };
-          if (verboseMode) {
-            console.log(chalk.dim("\n  → POST ") + chalk.cyan(endpoint));
-            console.log(prettyJson(body));
-          }
+          await initializeSession(session);
           const t0 = performance.now();
-          const res = await fetch(endpoint, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(body),
-          });
-          const json = (await res.json()) as {
-            result?: { tools?: Array<{ name: string; description?: string }> };
-          };
+          const result = await mcpCall(session, "tools/list", {});
           const elapsed = (performance.now() - t0).toFixed(0);
 
-          if (verboseMode) {
-            console.log(chalk.dim("  ← ") + chalk.green(String(res.status)));
-            console.log(prettyJson(json));
-          }
-
-          const tools = json.result?.tools || [];
+          const tools = result?.tools || [];
           if (tools.length === 0) {
             console.log(chalk.yellow("  No tools found."));
           } else {
@@ -132,29 +118,16 @@ function startRepl(endpoint: string, initialVerbose: boolean) {
       if (trimmed.startsWith("info ")) {
         const toolName = trimmed.slice(5).trim();
         try {
-          const res = await fetch(endpoint, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              jsonrpc: "2.0",
-              id: 1,
-              method: "tools/list",
-              params: {},
-            }),
-          });
-          const json = (await res.json()) as {
-            result?: {
-              tools?: Array<{
-                name: string;
-                description?: string;
-                inputSchema?: {
-                  properties?: Record<string, { type?: string; description?: string; enum?: string[] }>;
-                  required?: string[];
-                };
-              }>;
+          await initializeSession(session);
+          const result = await mcpCall(session, "tools/list", {});
+          const tools = (result?.tools || []) as Array<{
+            name: string;
+            description?: string;
+            inputSchema?: {
+              properties?: Record<string, { type?: string; description?: string; enum?: string[] }>;
+              required?: string[];
             };
-          };
-          const tools = json.result?.tools || [];
+          }>;
           const tool = tools.find((t) => t.name === toolName);
 
           if (!tool) {
@@ -233,62 +206,41 @@ function startRepl(endpoint: string, initialVerbose: boolean) {
       }
 
       try {
-        const body = {
-          jsonrpc: "2.0",
-          id: 2,
-          method: "tools/call",
-          params: { name: toolName, arguments: parsedArgs },
-        };
+        await initializeSession(session);
 
         if (verboseMode) {
-          console.log(chalk.dim("\n  → POST ") + chalk.cyan(endpoint));
-          console.log(prettyJson(body));
+          console.log(chalk.dim("\n  → ") + chalk.cyan(`${toolName}(${JSON.stringify(parsedArgs)})`));
         }
 
         const t0 = performance.now();
-        const res = await fetch(endpoint, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        });
-        const json = (await res.json()) as {
-          result?: { content?: Array<{ type: string; text?: string }> };
-          error?: { code?: number; message: string; data?: unknown };
-        };
+        const result = await mcpCall(session, "tools/call", { name: toolName, arguments: parsedArgs });
         const elapsed = (performance.now() - t0).toFixed(0);
 
         if (verboseMode) {
-          console.log(chalk.dim("  ← ") + chalk.green(String(res.status)));
-          console.log(prettyJson(json));
+          console.log(prettyJson(result));
         }
 
-        if (json.error) {
-          console.log(
-            chalk.red(`\n  Error${json.error.code ? ` ${json.error.code}` : ""}: ${json.error.message}`)
-          );
-          if (json.error.data) {
-            console.log(chalk.dim("  Data: ") + JSON.stringify(json.error.data));
-          }
-          console.log();
-        } else {
-          const content = json.result?.content || [];
-          for (const c of content) {
-            if (c.type === "text" && c.text) {
-              // Try to pretty-print as JSON
-              try {
-                const parsed = JSON.parse(c.text);
-                console.log("\n" + prettyJson(parsed));
-              } catch {
-                console.log(chalk.green("\n  " + c.text));
-              }
-            } else {
-              console.log(chalk.dim(`\n  [${c.type}] `) + JSON.stringify(c));
+        const content = result?.content || [];
+        for (const c of content) {
+          if (c.type === "text" && c.text) {
+            // Try to pretty-print as JSON
+            try {
+              const parsed = JSON.parse(c.text);
+              console.log("\n" + prettyJson(parsed));
+            } catch {
+              console.log(chalk.green("\n  " + c.text));
             }
+          } else {
+            console.log(chalk.dim(`\n  [${c.type}] `) + JSON.stringify(c));
           }
-          console.log(chalk.dim(`  ${chalk.green("✓")} ${elapsed}ms\n`));
         }
+        console.log(chalk.dim(`  ${chalk.green("✓")} ${elapsed}ms\n`));
       } catch (err: unknown) {
-        printConnectionError(err, endpoint);
+        if (err instanceof Error) {
+          console.log(chalk.red(`\n  Error: ${err.message}\n`));
+        } else {
+          printConnectionError(err, endpoint);
+        }
       }
 
       prompt();

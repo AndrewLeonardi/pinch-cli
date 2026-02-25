@@ -1,15 +1,25 @@
 {
   "name": "pinch-cli",
-  "version": "0.2.0",
-  "description": "The fastest way to build, test, and deploy MCP servers. Open source CLI for the Model Context Protocol.",
+  "version": "1.0.0",
+  "description": "Build, test, and deploy MCP servers with custom frontends — from your terminal.",
   "bin": { "pinch": "./dist/index.js" },
   "type": "module",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepublishOnly": "npm run build"
   },
   "keywords": [
+    "cli",
     "mcp",
     "model-context-protocol",
     "ai",
@@ -17,17 +27,16 @@
     "mcp-server",
     "llm",
     "agents",
-    "claude",
-    "openai",
-    "chatgpt",
     "developer-tools",
-    "cli"
+    "typescript",
+    "cloudflare-workers",
+    "deploy"
   ],
   "repository": {
     "type": "git",
     "url": "https://github.com/AndrewLeonardi/pinch-cli.git"
   },
-  "homepage": "https://github.com/AndrewLeonardi/pinch-cli#readme",
+  "homepage": "https://pinchers.ai",
   "bugs": {
     "url": "https://github.com/AndrewLeonardi/pinch-cli/issues"
   },
@@ -36,13 +45,16 @@
     "commander": "^13.1.0",
     "inquirer": "^12.6.0",
     "open": "^10.1.0",
-    "toml": "^3.0.0",
-    "chokidar": "^4.0.3"
+    "ora": "^8.1.1",
+    "toml": "^3.0.0"
   },
   "devDependencies": {
     "typescript": "^5.8.3",
-    "@types/node": "^22.15.0"
+    "@types/node": "^22.15.0",
+    "vitest": "^3.0.0"
   },
-  "engines": { "node": ">=18" },
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "license": "MIT"
 }

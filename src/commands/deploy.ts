@@ -1,6 +1,6 @@
 import chalk from "chalk";
-import { readFile, writeFile, readdir } from "fs/promises";
-import { resolve, join, relative } from "path";
+import { readFile, writeFile } from "fs/promises";
+import { resolve } from "path";
 import { existsSync } from "fs";
 import { spawn } from "child_process";
 import { select, confirm, input } from "@inquirer/prompts";
@@ -19,6 +19,11 @@ import {
   detectStorageUsage,
   detectD1Usage,
 } from "../lib/worker-gen.js";
+import {
+  bundleUIDirectory,
+  bundleServerFiles,
+  readOptionalFile,
+} from "../lib/bundle.js";
 
 // ── Shell helper ────────────────────────────────────────
 
@@ -44,60 +49,6 @@ async function runCommand(
       res({ stdout, stderr: stderr || err.message, code: 1 })
     );
   });
-}
-
-// ── File bundlers ───────────────────────────────────────
-
-async function bundleUIDirectory(): Promise<Record<string, string> | null> {
-  const uiDir = resolve(process.cwd(), "ui");
-  if (!existsSync(uiDir)) return null;
-
-  const files: Record<string, string> = {};
-
-  async function readDirRecursive(dir: string) {
-    const entries = await readdir(dir, { withFileTypes: true });
-    for (const entry of entries) {
-      const fullPath = join(dir, entry.name);
-      if (entry.isDirectory()) {
-        if (entry.name === "node_modules") continue;
-        await readDirRecursive(fullPath);
-      } else if (entry.isFile()) {
-        const relPath = relative(uiDir, fullPath);
-        files[relPath] = await readFile(fullPath, "utf-8");
-      }
-    }
-  }
-
-  await readDirRecursive(uiDir);
-  return Object.keys(files).length > 0 ? files : null;
-}
-
-async function bundleServerFiles(): Promise<Record<string, string> | null> {
-  const srcDir = resolve(process.cwd(), "src");
-  if (!existsSync(srcDir)) return null;
-
-  const files: Record<string, string> = {};
-
-  async function readDirRecursive(dir: string) {
-    const entries = await readdir(dir, { withFileTypes: true });
-    for (const entry of entries) {
-      const fullPath = join(dir, entry.name);
-      if (entry.isDirectory()) {
-        if (entry.name === "node_modules") continue;
-        await readDirRecursive(fullPath);
-      } else if (
-        entry.isFile() &&
-        entry.name !== "index.ts" &&
-        entry.name !== "_worker.ts"
-      ) {
-        const relPath = relative(srcDir, fullPath);
-        files[relPath] = await readFile(fullPath, "utf-8");
-      }
-    }
-  }
-
-  await readDirRecursive(srcDir);
-  return Object.keys(files).length > 0 ? files : null;
 }
 
 // ── Deploy to Cloudflare Workers ─────────────────────────
@@ -562,35 +513,15 @@ async function deployPinchers(config: PinchConfig) {
   // Read source — prefer tools.ts (new structure), fallback to index.ts (legacy)
   let sourceCode: string;
   try {
-    sourceCode = await readFile(
-      resolve(process.cwd(), "src/index.ts"),
-      "utf-8"
-    );
+    const { readSourceCode } = await import("../lib/bundle.js");
+    sourceCode = await readSourceCode();
   } catch {
-    try {
-      sourceCode = await readFile(
-        resolve(process.cwd(), "src/tools.ts"),
-        "utf-8"
-      );
-    } catch {
-      console.log(chalk.red("  Could not read src/index.ts or src/tools.ts\n"));
-      process.exit(1);
-    }
+    console.log(chalk.red("  Could not read src/tools.ts or src/index.ts\n"));
+    process.exit(1);
   }
 
-  // Read README
-  let readmeMd = "";
-  try {
-    readmeMd = await readFile(resolve(process.cwd(), "README.md"), "utf-8");
-  } catch {
-    // Optional
-  }
-
-  // Read schema
-  let schemaSql: string | null = null;
-  try {
-    schemaSql = await readFile(resolve(process.cwd(), "schema.sql"), "utf-8");
-  } catch {}
+  const readmeMd = (await readOptionalFile("README.md")) || "";
+  const schemaSql = await readOptionalFile("schema.sql");
 
   // Bundle files
   const uiFiles = await bundleUIDirectory();

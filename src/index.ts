@@ -1,25 +1,32 @@
 #!/usr/bin/env node
 import { Command } from "commander";
 import chalk from "chalk";
+import { createRequire } from "module";
 import { initCommand } from "./commands/init.js";
 import { devCommand } from "./commands/dev.js";
 import { testCommand } from "./commands/test.js";
 import { loginCommand } from "./commands/login.js";
-import { publishCommand } from "./commands/publish.js";
 import { deployCommand } from "./commands/deploy.js";
+import { importCommand } from "./commands/import.js";
+import { exportCommand } from "./commands/export.js";
+import { promptCommand } from "./commands/prompt.js";
+
+const require = createRequire(import.meta.url);
+const { version } = require("../package.json");
 
 const program = new Command();
 
 program
   .name("pinch")
   .description(
-    chalk.bold("⚡ pinch") +
-      chalk.dim(" — the fastest way to build MCP servers\n\n") +
-      "  Build, test, and deploy MCP (Model Context Protocol) servers.\n" +
-      "  Your AI tools, deployed anywhere.\n\n" +
-      chalk.dim("  Docs: https://github.com/AndrewLeonardi/pinch-cli")
+    chalk.bold("pinch") +
+      chalk.dim(" — build, test, and deploy MCP servers\n\n") +
+      "  The fastest way to ship AI tools with custom frontends.\n" +
+      "  Works standalone or with the Pinchers.ai marketplace.\n\n" +
+      chalk.dim("  Docs:   https://github.com/AndrewLeonardi/pinch-cli\n") +
+      chalk.dim("  Site:   https://pinchers.ai")
   )
-  .version("0.2.0");
+  .version(version);
 
 // ── Core commands ─────────────────────────────────────────
 
@@ -44,6 +51,26 @@ program
   .option("-p, --port <port>", "port for test server", "3199")
   .action(testCommand);
 
+// ── AI-first workflow ────────────────────────────────────
+
+program
+  .command("prompt")
+  .description("Generate an AI prompt for building a new tool")
+  .argument("[description]", "what the tool should do")
+  .action(promptCommand);
+
+program
+  .command("import")
+  .description("Import a JSON tool package (from AI output) into a project")
+  .argument("[file]", "path to JSON package file (or paste interactively)")
+  .action(importCommand);
+
+program
+  .command("export")
+  .description("Export current project as a portable JSON package")
+  .option("-o, --output <file>", "write to file instead of stdout")
+  .action(exportCommand);
+
 // ── Deploy commands ───────────────────────────────────────
 
 program
@@ -53,16 +80,11 @@ program
   .option("--setup", "configure credentials for the target")
   .action(deployCommand);
 
-// ── Pinchers.ai specific ─────────────────────────────────
+// ── Pinchers.ai marketplace ──────────────────────────────
 
 program
   .command("login")
   .description("Authenticate with Pinchers.ai marketplace")
   .action(loginCommand);
-
-program
-  .command("publish")
-  .description("Submit to Pinchers.ai (alias for deploy pinchers)")
-  .action(publishCommand);
 
 program.parse();

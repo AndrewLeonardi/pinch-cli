@@ -74,14 +74,41 @@ export function getPlatformUrl(): string {
 }
 
 /**
- * Load config from ~/.pinchrc (falls back to legacy ~/.pinchersrc)
+ * Load config from (in priority order):
+ * 1. Project-local .pinchrc (in cwd)
+ * 2. Environment variables (PINCH_CF_API_TOKEN, PINCH_CF_ACCOUNT_ID)
+ * 3. Global ~/.pinchrc
+ * 4. Legacy ~/.pinchersrc
  */
 export async function loadConfig(): Promise<PinchConfig> {
-  // Try new path first, then legacy
-  const path = existsSync(RC_PATH) ? RC_PATH : LEGACY_RC_PATH;
-  if (!existsSync(path)) return {};
-  const raw = await readFile(path, "utf-8");
-  return JSON.parse(raw);
+  let config: PinchConfig = {};
+
+  // Global config (legacy fallback)
+  const globalPath = existsSync(RC_PATH) ? RC_PATH : LEGACY_RC_PATH;
+  if (existsSync(globalPath)) {
+    try {
+      config = JSON.parse(await readFile(globalPath, "utf-8"));
+    } catch {
+      // Invalid JSON — start fresh
+    }
+  }
+
+  // Project-local .pinchrc overrides global
+  const localPath = resolve(process.cwd(), ".pinchrc");
+  if (existsSync(localPath)) {
+    try {
+      const local = JSON.parse(await readFile(localPath, "utf-8"));
+      config = { ...config, ...local };
+    } catch {
+      // Invalid JSON — ignore local
+    }
+  }
+
+  // Environment variables override everything
+  if (process.env.PINCH_CF_API_TOKEN) config.cf_api_token = process.env.PINCH_CF_API_TOKEN;
+  if (process.env.PINCH_CF_ACCOUNT_ID) config.cf_account_id = process.env.PINCH_CF_ACCOUNT_ID;
+
+  return config;
 }
 
 /**

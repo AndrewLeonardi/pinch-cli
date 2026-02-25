@@ -3,6 +3,14 @@ import { spawn, type ChildProcess } from "child_process";
 import { existsSync } from "fs";
 import chalk from "chalk";
 import { loadManifest, type TestCase } from "../lib/config.js";
+import {
+  createSession,
+  initializeSession,
+  mcpCall,
+  buildMinimalInput,
+  type McpSession,
+  type ToolSchema,
+} from "../lib/mcp-client.js";
 
 // ── Result tracking ─────────────────────────────────────
 
@@ -49,50 +57,10 @@ function runManifestChecks(manifest: NonNullable<Awaited<ReturnType<typeof loadM
 
 // ── Phase 2: Live contract tests ────────────────────────
 
-interface ToolSchema {
-  name: string;
-  description?: string;
-  inputSchema?: {
-    properties?: Record<string, { type?: string; description?: string; enum?: string[] }>;
-    required?: string[];
-  };
-}
-
-function buildMinimalInput(schema: ToolSchema): Record<string, unknown> {
-  const input: Record<string, unknown> = {};
-  const props = schema.inputSchema?.properties || {};
-  const required = schema.inputSchema?.required || [];
-
-  for (const key of required) {
-    const prop = props[key];
-    if (!prop) continue;
-
-    if (prop.enum && prop.enum.length > 0) {
-      input[key] = prop.enum[0];
-    } else if (prop.type === "string") {
-      input[key] = "test";
-    } else if (prop.type === "number" || prop.type === "integer") {
-      input[key] = 1;
-    } else if (prop.type === "boolean") {
-      input[key] = true;
-    } else if (prop.type === "array") {
-      input[key] = [];
-    } else if (prop.type === "object") {
-      input[key] = {};
-    } else {
-      input[key] = "test";
-    }
-  }
-
-  return input;
-}
-
 async function waitForServer(baseUrl: string, timeoutMs: number = 15000): Promise<boolean> {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
     try {
-      // Use a simple GET to the base URL to check if the server is up
-      // (servers serve HTML on GET /, so any response means it's ready)
       const res = await fetch(baseUrl, { method: "GET" });
       if (res.ok || res.status < 500) return true;
     } catch {
@@ -103,70 +71,12 @@ async function waitForServer(baseUrl: string, timeoutMs: number = 15000): Promis
   return false;
 }
 
-// ── MCP Session helper ──────────────────────────────────
-
-let _sessionId: string | null = null;
-let _msgId = 1;
-
-async function mcpCall(endpoint: string, method: string, params: Record<string, unknown> = {}): Promise<any> {
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    "Accept": "text/event-stream, application/json",
-  };
-  if (_sessionId) headers["Mcp-Session-Id"] = _sessionId;
-
-  const body = JSON.stringify({ jsonrpc: "2.0", id: _msgId++, method, params });
-  const res = await fetch(endpoint, { method: "POST", headers, body });
-
-  const sid = res.headers.get("mcp-session-id");
-  if (sid) _sessionId = sid;
-
-  const text = await res.text();
-  const lines = text.split("\n").filter((l) => l.startsWith("data: "));
-  for (const line of lines) {
-    try {
-      const parsed = JSON.parse(line.slice(6));
-      if (parsed.result) return parsed.result;
-      if (parsed.error) throw new Error(parsed.error.message || "MCP error");
-    } catch (e: unknown) {
-      if (e instanceof Error && e.message !== "MCP error") continue;
-      throw e;
-    }
-  }
-  // For non-SSE responses, try parsing the full body
-  try {
-    const json = JSON.parse(text);
-    if (json.result) return json.result;
-    if (json.error) throw new Error(json.error.message || "MCP error");
-  } catch {
-    // Not JSON either
-  }
-  return null;
-}
-
-async function ensureMcpSession(endpoint: string): Promise<void> {
-  if (_sessionId) return;
-  await mcpCall(endpoint, "initialize", {
-    protocolVersion: "2025-03-26",
-    capabilities: {},
-    clientInfo: { name: "pinch-test", version: "1.0.0" },
-  });
-  // Send initialized notification
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (_sessionId) headers["Mcp-Session-Id"] = _sessionId;
-  await fetch(endpoint, {
-    method: "POST",
-    headers,
-    body: JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized", params: {} }),
-  });
-}
-
-async function runContractTests(endpoint: string): Promise<ToolSchema[]> {
+async function runContractTests(session: McpSession): Promise<ToolSchema[]> {
   console.log(chalk.bold("\n  Phase 2: Contract Tests\n"));
 
   // Initialize MCP session first
   try {
-    await ensureMcpSession(endpoint);
+    await initializeSession(session);
     check("MCP session initialized", true);
   } catch (err: unknown) {
     check("MCP session initialized", false, String(err));
@@ -177,7 +87,7 @@ async function runContractTests(endpoint: string): Promise<ToolSchema[]> {
   let tools: ToolSchema[] = [];
   try {
     const t0 = performance.now();
-    const result = await mcpCall(endpoint, "tools/list", {});
+    const result = await mcpCall(session, "tools/list", {});
     const elapsed = (performance.now() - t0).toFixed(0);
 
     tools = result?.tools || [];
@@ -193,7 +103,7 @@ async function runContractTests(endpoint: string): Promise<ToolSchema[]> {
     const minInput = buildMinimalInput(tool);
     try {
       const t0 = performance.now();
-      const result = await mcpCall(endpoint, "tools/call", { name: tool.name, arguments: minInput });
+      const result = await mcpCall(session, "tools/call", { name: tool.name, arguments: minInput });
       const elapsed = (performance.now() - t0).toFixed(0);
 
       const content = result?.content;
@@ -215,7 +125,7 @@ async function runContractTests(endpoint: string): Promise<ToolSchema[]> {
 
 // ── Phase 3: User-defined tests ─────────────────────────
 
-async function runUserTests(endpoint: string, testCases: TestCase[], discoveredTools: ToolSchema[]) {
+async function runUserTests(session: McpSession, testCases: TestCase[], discoveredTools: ToolSchema[]) {
   console.log(chalk.bold(`\n  Phase 3: Test Cases (${testCases.length})\n`));
 
   for (let i = 0; i < testCases.length; i++) {
@@ -231,7 +141,7 @@ async function runUserTests(endpoint: string, testCases: TestCase[], discoveredT
 
     try {
       const t0 = performance.now();
-      const result = await mcpCall(endpoint, "tools/call", { name: tc.tool, arguments: tc.input });
+      const result = await mcpCall(session, "tools/call", { name: tc.tool, arguments: tc.input });
       const elapsed = (performance.now() - t0).toFixed(0);
 
       const content = (result?.content || []) as Array<{ type: string; text?: string }>;
@@ -312,8 +222,6 @@ export async function testCommand(options: { port: string }) {
   }
 
   // Phase 2: Live contract tests
-  _sessionId = null;
-  _msgId = 1;
   const port = options.port;
   const entryFile = resolve(process.cwd(), "src/index.ts");
 
@@ -347,6 +255,7 @@ export async function testCommand(options: { port: string }) {
 
     const baseUrl = `http://localhost:${port}`;
     const endpoint = `${baseUrl}${manifest.tool.mcp.endpoint}`;
+    const session = createSession(endpoint);
 
     const ready = await waitForServer(baseUrl);
     if (!ready) {
@@ -362,12 +271,12 @@ export async function testCommand(options: { port: string }) {
     check("server starts within 15s", true);
     console.log(chalk.dim(`  Server ready at ${endpoint}\n`));
 
-    const discoveredTools = await runContractTests(endpoint);
+    const discoveredTools = await runContractTests(session);
 
     // Phase 3: User-defined tests
     const testCases = manifest.test || [];
     if (testCases.length > 0) {
-      await runUserTests(endpoint, testCases, discoveredTools);
+      await runUserTests(session, testCases, discoveredTools);
     } else {
       console.log(chalk.dim("\n  No [[test]] cases in pinch.toml — add some for custom assertions."));
     }
