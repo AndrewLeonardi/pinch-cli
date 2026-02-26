@@ -9,7 +9,7 @@ import { homedir } from "os";
 import { join } from "path";
 
 const RC_PATH = join(homedir(), ".pinchrc");
-const PINCHERS_URL = process.env.PINCHERS_URL || "https://pinchers.ai";
+const PINCHERS_URL = process.env.PINCHERS_URL || "https://pinchers.vercel.app";
 
 export interface PinchConfig {
   api_key?: string;
