@@ -1,0 +1,1424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>pinch — Learn, Build, Ship</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --red: #e8503a;
+    --red-hover: #d4432f;
+    --bg: #f0ece4;
+    --bg-card: #ffffff;
+    --border: #d9d3c7;
+    --text: #1a1a1a;
+    --text-dim: #6b6560;
+    --text-light: #9a948d;
+    --green: #22c55e;
+    --blue: #3b82f6;
+    --radius: 12px;
+    --shadow: 0 2px 8px rgba(0,0,0,0.06);
+  }
+
+  body {
+    font-family: 'DM Sans', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    line-height: 1.5;
+  }
+
+  code, pre, .mono { font-family: 'JetBrains Mono', monospace; }
+
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 32px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 700;
+    font-size: 20px;
+    color: var(--text);
+    text-decoration: none;
+  }
+
+  .logo svg { width: 28px; height: 28px; }
+
+  .steps { display: flex; gap: 8px; align-items: center; }
+
+  .step-dot {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 20px;
+    border-radius: 100px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: 2px solid transparent;
+    background: transparent;
+    color: var(--text-dim);
+  }
+
+  .step-dot.active { background: var(--text); color: white; }
+  .step-dot.completed { background: var(--green); color: white; }
+  .step-dot:hover:not(.active) { border-color: var(--border); }
+
+  .step-num {
+    width: 24px; height: 24px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 700; background: var(--border); color: var(--text-dim);
+  }
+
+  .step-dot.active .step-num { background: rgba(255,255,255,0.2); color: white; }
+  .step-dot.completed .step-num { background: rgba(255,255,255,0.3); color: white; }
+
+  .main { max-width: 800px; margin: 0 auto; padding: 48px 24px 120px; }
+  .section { display: none; }
+  .section.active { display: block; animation: fadeIn 0.3s ease; }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  h1 { font-size: 36px; font-weight: 700; margin-bottom: 12px; letter-spacing: -0.5px; }
+  h2 { font-size: 24px; font-weight: 700; margin-bottom: 8px; }
+  h3 { font-size: 18px; font-weight: 700; margin-bottom: 6px; }
+
+  .subtitle { font-size: 18px; color: var(--text-dim); margin-bottom: 40px; line-height: 1.6; }
+
+  .card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 28px;
+    margin-bottom: 20px;
+    box-shadow: var(--shadow);
+  }
+
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 12px 28px; border-radius: 100px;
+    font-family: inherit; font-size: 15px; font-weight: 600;
+    border: none; cursor: pointer; transition: all 0.2s;
+  }
+
+  .btn-primary { background: var(--text); color: white; }
+  .btn-primary:hover { background: #333; }
+  .btn-primary:disabled { background: var(--text-light); cursor: not-allowed; }
+  .btn-red { background: var(--red); color: white; }
+  .btn-red:hover { background: var(--red-hover); }
+  .btn-outline { background: transparent; border: 2px solid var(--border); color: var(--text); }
+  .btn-outline:hover { border-color: var(--text-dim); }
+  .btn-ghost { background: transparent; color: var(--text-dim); padding: 8px 16px; }
+  .btn-ghost:hover { color: var(--text); }
+  .btn-sm { padding: 8px 16px; font-size: 13px; }
+  .btn-copy { background: #2a2a2a; color: #ccc; border: 1px solid #444; border-radius: 6px; padding: 6px 14px; font-size: 12px; font-family: inherit; cursor: pointer; }
+  .btn-copy:hover { background: #333; color: white; }
+
+  .btn-row { display: flex; gap: 12px; margin-top: 32px; }
+
+  .form-group { margin-bottom: 20px; }
+  .form-group label { display: block; font-size: 14px; font-weight: 600; margin-bottom: 6px; }
+
+  .form-group input, .form-group textarea {
+    width: 100%; padding: 12px 16px;
+    border: 1px solid var(--border); border-radius: 8px;
+    font-family: inherit; font-size: 15px;
+    background: white; color: var(--text); transition: border-color 0.2s;
+  }
+
+  .form-group textarea {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px; line-height: 1.5;
+    resize: vertical; min-height: 120px;
+  }
+
+  .form-group input:focus, .form-group textarea:focus { outline: none; border-color: var(--red); }
+
+  .slug-preview { font-size: 13px; color: var(--text-light); margin-top: 4px; font-family: 'JetBrains Mono', monospace; }
+
+  .code-block {
+    background: #1a1a1a; color: #e0e0e0; border-radius: 8px;
+    padding: 20px; font-family: 'JetBrains Mono', monospace;
+    font-size: 13px; line-height: 1.6; overflow-x: auto;
+    margin: 16px 0; position: relative; white-space: pre-wrap; word-break: break-word;
+  }
+
+  .code-block-header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 8px;
+  }
+
+  .code-block-header .label { font-size: 13px; font-weight: 600; color: var(--text-dim); }
+
+  .demo-box {
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: var(--radius); overflow: hidden; margin: 24px 0;
+  }
+
+  .demo-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 20px; border-bottom: 1px solid var(--border); background: #fafaf8;
+  }
+
+  .demo-header .label { font-weight: 600; font-size: 14px; }
+  .demo-body { padding: 20px; }
+  .demo-result { display: none; margin-top: 16px; }
+  .demo-result.visible { display: block; animation: fadeIn 0.4s ease; }
+  .demo-arrow { text-align: center; padding: 12px; color: var(--text-light); font-size: 20px; display: none; }
+  .demo-arrow.visible { display: block; animation: fadeIn 0.3s ease; }
+
+  .demo-link {
+    display: none; margin-top: 12px; padding: 12px 16px;
+    background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px;
+  }
+
+  .demo-link.visible { display: block; animation: fadeIn 0.3s ease; }
+  .demo-link a { color: var(--green); font-weight: 600; text-decoration: none; }
+  .demo-link a:hover { text-decoration: underline; }
+
+  .spinner {
+    width: 20px; height: 20px;
+    border: 2px solid var(--border); border-top-color: var(--red);
+    border-radius: 50%; animation: spin 0.6s linear infinite; display: inline-block;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .loading-text { display: flex; align-items: center; gap: 12px; font-size: 15px; color: var(--text-dim); padding: 20px 0; }
+
+  .badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 100px; font-size: 12px; font-weight: 600; }
+  .badge-green { background: #dcfce7; color: #166534; }
+  .badge-red { background: #fecaca; color: #991b1b; }
+
+  .green-dot { width: 8px; height: 8px; background: var(--green); border-radius: 50%; display: inline-block; }
+
+  .tool-item { border: 1px solid var(--border); border-radius: 8px; margin-bottom: 12px; overflow: hidden; }
+
+  .tool-header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 14px 16px; cursor: pointer; background: #fafaf8;
+  }
+
+  .tool-header:hover { background: #f5f3ee; }
+  .tool-name { font-weight: 600; font-size: 15px; }
+  .tool-desc { font-size: 13px; color: var(--text-dim); }
+  .tool-body { padding: 16px; display: none; border-top: 1px solid var(--border); }
+  .tool-body.open { display: block; }
+  .tool-input { margin-bottom: 12px; }
+  .tool-input label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+
+  .tool-input input {
+    width: 100%; padding: 8px 12px;
+    border: 1px solid var(--border); border-radius: 6px;
+    font-family: inherit; font-size: 14px;
+  }
+
+  .tool-input input:focus { outline: none; border-color: var(--red); }
+
+  .tool-result {
+    background: #1a1a1a; color: #e0e0e0; border-radius: 6px; padding: 14px;
+    font-family: 'JetBrains Mono', monospace; font-size: 12px;
+    line-height: 1.5; white-space: pre-wrap; word-break: break-word;
+    margin-top: 12px; display: none; max-height: 300px; overflow-y: auto;
+  }
+
+  .tool-result.visible { display: block; animation: fadeIn 0.3s ease; }
+
+  .deploy-card {
+    background: var(--bg-card); border: 2px solid var(--border);
+    border-radius: var(--radius); padding: 28px; margin-bottom: 16px;
+    cursor: pointer; transition: all 0.2s;
+  }
+
+  .deploy-card:hover { border-color: var(--text-dim); }
+  .deploy-card.selected { border-color: var(--red); }
+  .deploy-card .deploy-name { font-weight: 700; font-size: 18px; margin-bottom: 4px; }
+  .deploy-card .deploy-desc { font-size: 14px; color: var(--text-dim); }
+  .deploy-card .deploy-badge { display: inline-block; background: var(--red); color: white; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 4px; margin-left: 8px; }
+  .deploy-form { display: none; margin-top: 20px; }
+  .deploy-form.visible { display: block; }
+
+  .success-box { text-align: center; padding: 48px 24px; }
+  .success-box .icon { font-size: 64px; margin-bottom: 20px; }
+  .success-box h2 { margin-bottom: 12px; }
+
+  .url-box {
+    background: #1a1a1a; color: #e0e0e0; border-radius: 8px;
+    padding: 14px 20px; font-family: 'JetBrains Mono', monospace;
+    font-size: 14px; display: inline-block; margin: 20px 0;
+    cursor: pointer; transition: background 0.2s;
+  }
+
+  .url-box:hover { background: #2a2a2a; }
+
+  .collapsible-toggle {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 14px; color: var(--text-dim); cursor: pointer;
+    padding: 8px 0; border: none; background: none; font-family: inherit;
+  }
+
+  .collapsible-toggle:hover { color: var(--text); }
+  .collapsible-toggle .arrow { transition: transform 0.2s; }
+  .collapsible-toggle.open .arrow { transform: rotate(90deg); }
+  .collapsible-content { display: none; }
+  .collapsible-content.open { display: block; animation: fadeIn 0.2s ease; }
+
+  .step-divider { border-top: 1px solid var(--border); margin: 32px 0; }
+
+  .prompt-box {
+    background: #fffbf5; border: 1px solid #f5deb3; border-radius: 8px;
+    padding: 16px; font-size: 14px; color: var(--text-dim); line-height: 1.7;
+  }
+
+  .json-error { color: #ef4444; font-size: 13px; margin-top: 8px; display: none; }
+  .json-error.visible { display: block; }
+
+  .dev-tabs { display: flex; gap: 4px; margin-bottom: 24px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 4px; }
+  .dev-tab { flex: 1; padding: 10px; border: none; background: transparent; font-family: inherit; font-size: 14px; font-weight: 600; color: var(--text-dim); cursor: pointer; border-radius: 6px; transition: all 0.15s; }
+  .dev-tab.active { background: var(--text); color: white; }
+  .dev-tab:hover:not(.active) { background: #f5f3ee; }
+  .dev-panel { display: none; }
+  .dev-panel.active { display: block; animation: fadeIn 0.2s ease; }
+
+  .dev-banner {
+    background: #fffbf5; border: 1px solid #f5deb3; border-radius: 8px;
+    padding: 14px 18px; margin-bottom: 24px; font-size: 14px; color: var(--text-dim);
+    display: flex; align-items: center; gap: 10px;
+  }
+
+  .log-output {
+    background: #1a1a1a; color: #e0e0e0; border-radius: 8px;
+    padding: 16px; font-family: 'JetBrains Mono', monospace;
+    font-size: 12px; line-height: 1.6; white-space: pre-wrap; word-break: break-word;
+    max-height: 400px; overflow-y: auto;
+  }
+
+  /* Compare grid (before/after) */
+  .compare-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+  .compare-side { border-radius: 8px; overflow: hidden; }
+
+  .compare-label {
+    font-size: 12px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.5px; color: var(--text-light); margin-bottom: 8px;
+  }
+
+  .compare-chat {
+    background: #fafaf8; border: 2px solid var(--green); border-radius: 8px;
+    padding: 20px; min-height: 200px; display: flex; flex-direction: column;
+    justify-content: center; gap: 16px;
+  }
+
+  .compare-bubble {
+    background: var(--text); color: white; padding: 14px 18px; border-radius: 16px 16px 4px 16px;
+    font-size: 15px; line-height: 1.5; font-weight: 500;
+  }
+
+  .compare-reply {
+    background: #dcfce7; color: #166534; padding: 12px 16px;
+    border-radius: 16px 16px 16px 4px; font-size: 14px; font-weight: 500;
+    display: flex; align-items: center;
+  }
+
+  /* Demo link card */
+  .demo-link-card {
+    display: flex; align-items: center; gap: 12px;
+    padding: 14px 18px; background: #f0fdf4; border: 1px solid #bbf7d0;
+    border-radius: 8px; text-decoration: none; color: var(--text);
+    transition: all 0.2s;
+  }
+  .demo-link-card:hover { background: #dcfce7; border-color: #86efac; }
+
+  @media (max-width: 640px) {
+    .topbar { padding: 12px 16px; }
+    .main { padding: 32px 16px 80px; }
+    h1 { font-size: 28px; }
+    .steps { gap: 4px; }
+    .step-dot { padding: 6px 12px; font-size: 13px; }
+    .compare-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <a href="https://pinchers.ai" class="logo" target="_blank">
+    <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="50" cy="50" r="48" fill="#1a1a1a"/>
+      <text x="50" y="68" font-size="52" text-anchor="middle" fill="white">🦞</text>
+    </svg>
+    pinch
+  </a>
+  <div class="steps">
+    <button class="step-dot active" onclick="goToStep('learn')" id="step-learn">
+      <span class="step-num">1</span> Learn
+    </button>
+    <button class="step-dot" onclick="goToStep('build')" id="step-build">
+      <span class="step-num">2</span> Build
+    </button>
+    <button class="step-dot" onclick="goToStep('dev')" id="step-dev" style="display:none;">
+      <span class="step-num">3</span> Dev
+    </button>
+    <button class="step-dot" onclick="goToStep('ship')" id="step-ship">
+      <span class="step-num" id="ship-num">3</span> Ship
+    </button>
+  </div>
+</div>
+
+<div class="main">
+
+  <!-- ══ STEP 1: LEARN ═══════════════════════════════════ -->
+
+  <div class="section active" id="section-learn">
+    <h1>What is MCP?</h1>
+    <p class="subtitle">
+      MCP (Model Context Protocol) lets AI agents use tools you build.<br>
+      You define tools with a name, description, and input schema —<br>
+      any AI can discover and call them automatically.
+    </p>
+
+    <!-- Live demo — interactive -->
+    <div class="card" id="demo-card">
+      <h2>Try it live</h2>
+      <p style="color: var(--text-dim); margin-bottom: 20px;">
+        Fill in the fields below and hit create. This calls a <strong>real MCP server</strong> and returns a real invoice.
+      </p>
+
+      <div class="demo-box">
+        <div class="demo-header">
+          <span class="label">📋 TinyInvoice — Live MCP Server</span>
+          <span class="badge badge-green"><span class="green-dot"></span> Online</span>
+        </div>
+        <div class="demo-body">
+          <!-- Chat hint that updates dynamically -->
+          <div id="demo-chat-hint" style="background:#fafaf8;border:1px solid var(--border);border-radius:8px;padding:14px 16px;margin-bottom:16px;">
+            <div style="font-size:12px;font-weight:600;color:var(--text-light);margin-bottom:6px;">What an AI agent does when you say:</div>
+            <div style="font-size:15px;font-weight:500;" id="demo-chat-text">&ldquo;Create me an invoice for <strong>$2,500</strong> for <strong>Acme Corp</strong>&rdquo;</div>
+          </div>
+
+          <!-- Form fields -->
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
+            <div class="form-group" style="margin:0;">
+              <label style="font-size:13px;">Client name</label>
+              <input type="text" id="demo-client" value="Acme Corp" oninput="updateDemoChat()" style="padding:10px 12px;font-size:14px;">
+            </div>
+            <div class="form-group" style="margin:0;">
+              <label style="font-size:13px;">What for?</label>
+              <input type="text" id="demo-desc" value="Website Redesign" oninput="updateDemoChat()" style="padding:10px 12px;font-size:14px;">
+            </div>
+          </div>
+          <div class="form-group" style="margin:0 0 16px 0;max-width:200px;">
+            <label style="font-size:13px;">Amount ($)</label>
+            <input type="number" id="demo-amount" value="2500" min="1" max="999999" oninput="updateDemoChat()" style="padding:10px 12px;font-size:14px;">
+          </div>
+
+          <!-- Idle state: create button -->
+          <div id="demo-idle">
+            <button class="btn btn-red" onclick="runDemo()" id="demo-btn">Create Invoice →</button>
+          </div>
+
+          <!-- Loading state -->
+          <div id="demo-loading" style="display:none;">
+            <div class="loading-text"><span class="spinner"></span> Creating invoice...</div>
+          </div>
+
+          <!-- Success state -->
+          <div id="demo-success" style="display:none;">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+              <span style="font-size:28px;">✅</span>
+              <div>
+                <div style="font-weight:700;font-size:16px;">Invoice Created!</div>
+                <div style="font-size:13px;color:var(--text-dim);">A real MCP tool call just happened. No code needed.</div>
+              </div>
+            </div>
+
+            <!-- Primary output: the link -->
+            <a id="demo-invoice-link" href="#" target="_blank" rel="noopener noreferrer" class="demo-link-card">
+              <span style="font-size:20px;">🔗</span>
+              <div style="flex:1;">
+                <strong>View your invoice</strong>
+                <span id="demo-invoice-meta" style="display:block;font-size:13px;color:var(--text-dim);"></span>
+              </div>
+              <span style="color:var(--text-light);font-size:18px;">→</span>
+            </a>
+
+            <!-- Expandable raw output -->
+            <button class="collapsible-toggle" onclick="toggleCollapsible(this)" style="margin-top:12px;">
+              <span class="arrow">▶</span> View raw MCP response
+            </button>
+            <div class="collapsible-content">
+              <div class="code-block" id="demo-output" style="margin:8px 0 0 0;font-size:12px;max-height:200px;overflow-y:auto;"></div>
+            </div>
+
+            <button class="btn btn-ghost" onclick="resetDemo()" style="margin-top:12px;">Create another →</button>
+          </div>
+
+          <!-- Error state -->
+          <div id="demo-error" style="display:none;">
+            <div class="badge badge-red" id="demo-error-msg"></div>
+            <button class="btn btn-ghost" onclick="resetDemo()" style="margin-top:8px;">Try again</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="step-divider"></div>
+
+    <!-- Before/After: Code vs Natural Language -->
+    <div class="card">
+      <h2>No Code. Just <span style="color:var(--red);">Ask.</span></h2>
+      <p style="color: var(--text-dim); margin-bottom: 20px;">
+        MCP lets any AI agent use real tools through natural language. No APIs. No code.
+      </p>
+
+      <div class="compare-grid">
+        <!-- The old way -->
+        <div class="compare-side compare-old">
+          <div class="compare-label">The old way</div>
+          <div class="code-block" style="font-size:11px;opacity:0.5;margin:0;border:1px solid var(--border);">fetch('/api/invoices', {
+  method: 'POST',
+  headers: {
+    'Authorization': 'Bearer sk_...',
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    client: 'Acme Corp',
+    items: [{
+      desc: 'Website Redesign',
+      qty: 1, price: 2500
+    }],
+    currency: 'USD'
+  })
+})</div>
+        </div>
+
+        <!-- With MCP -->
+        <div class="compare-side compare-new">
+          <div class="compare-label" style="color:var(--green);">With MCP</div>
+          <div class="compare-chat">
+            <div class="compare-bubble">
+              &ldquo;Create an invoice for Acme Corp &mdash; $2,500 for a website redesign.&rdquo;
+            </div>
+            <div class="compare-reply">
+              <span style="color:var(--green);font-weight:700;margin-right:6px;">✓</span>
+              Done! Invoice #INV-4821 created.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <p style="color: var(--text-dim); margin-top: 20px; font-size: 14px;">
+        Works with Claude, GPT, Gemini &mdash; any AI that speaks MCP.
+      </p>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="goToStep('build')" id="learn-next-btn" disabled title="Try the demo first!">Next: Build your own →</button>
+      <span id="learn-next-hint" style="font-size:13px;color:var(--text-light);align-self:center;">↑ Try the demo first</span>
+    </div>
+  </div>
+
+  <!-- ══ STEP 2: BUILD ═══════════════════════════════════ -->
+
+  <div class="section" id="section-build">
+
+    <!-- Phase 1: Describe + Import -->
+    <div id="build-describe">
+      <h1>Build your tool</h1>
+      <p class="subtitle">
+        Describe what you want to build, get a prompt for AI, then paste the JSON back.
+      </p>
+
+      <div class="card">
+        <h3>Step 1: Describe your tool</h3>
+        <p style="color: var(--text-dim); margin-bottom: 16px; font-size: 14px;">
+          Tell us what your MCP tool should do. We'll generate a prompt you can paste into Claude or ChatGPT.
+        </p>
+        <div class="form-group">
+          <label>What should your tool do?</label>
+          <input type="text" id="tool-idea" placeholder="e.g. A project management tool that creates tasks, assigns people, and tracks status">
+        </div>
+        <button class="btn btn-primary" onclick="generatePrompt()">Generate AI Prompt →</button>
+      </div>
+
+      <div class="card" id="prompt-card" style="display: none;">
+        <h3>Step 2: Copy this prompt to Claude or ChatGPT</h3>
+        <p style="color: var(--text-dim); margin-bottom: 16px; font-size: 14px;">
+          Paste this into any AI. It will generate the JSON for your tool.
+        </p>
+        <div style="position: relative;">
+          <div class="code-block" id="generated-prompt" style="max-height: 200px; overflow-y: auto; font-size: 12px;"></div>
+          <button class="btn-copy" onclick="copyPrompt()" id="copy-prompt-btn" style="position: absolute; top: 8px; right: 8px;">Copy</button>
+        </div>
+      </div>
+
+      <div class="card" id="import-card">
+        <h3>Paste the JSON</h3>
+        <p style="color: var(--text-dim); margin-bottom: 16px; font-size: 14px;">
+          After the AI generates your tool, paste the JSON package here.
+        </p>
+        <div class="form-group">
+          <textarea id="json-input" rows="10" placeholder='{
+  "name": "My Tool",
+  "slug": "my-tool",
+  "description": "What it does",
+  "category": "Utility",
+  "source_code": "import { McpServer } from ...",
+  ...
+}'></textarea>
+          <div class="json-error" id="json-error"></div>
+        </div>
+        <div class="form-group">
+          <label>Project Name</label>
+          <input type="text" id="tool-name" placeholder="My Project Tool" oninput="updateSlug()">
+          <div class="slug-preview" id="slug-preview"></div>
+        </div>
+        <button class="btn btn-red" onclick="importJSON()" id="import-btn">Import & Build →</button>
+      </div>
+    </div>
+
+    <!-- Phase 2: Installing -->
+    <div id="build-install" style="display: none;">
+      <h1>Setting up...</h1>
+      <div class="card">
+        <div class="loading-text" id="install-status">
+          <span class="spinner"></span> Creating project files...
+        </div>
+      </div>
+    </div>
+
+    <!-- Phase 3: Test panel -->
+    <div id="build-test" style="display: none;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+        <h1>Test your tools</h1>
+        <span class="badge badge-green"><span class="green-dot"></span> Dev server running</span>
+      </div>
+      <p class="subtitle">Your MCP server is live locally. Try calling the tools below.</p>
+      <div id="tools-list"></div>
+      <div class="btn-row">
+        <button class="btn btn-primary" onclick="goToStep('ship')">Next: Ship it →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ STEP: DEV MODE ═══════════════════════════════════ -->
+
+  <div class="section" id="section-dev">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <h1>Dev Mode</h1>
+      <span class="badge badge-green" id="dev-server-badge"><span class="green-dot"></span> Dev server running</span>
+    </div>
+    <p class="subtitle">Your tool is running locally. Test, update, and iterate.</p>
+
+    <div class="dev-banner">
+      💡 You can also edit files directly in your editor — the dev server hot-reloads automatically.
+    </div>
+
+    <div class="dev-tabs">
+      <button class="dev-tab active" onclick="switchDevTab('test')">Test</button>
+      <button class="dev-tab" onclick="switchDevTab('update')">Update</button>
+      <button class="dev-tab" onclick="switchDevTab('logs')">Logs</button>
+    </div>
+
+    <!-- Test tab -->
+    <div class="dev-panel active" id="dev-test">
+      <div id="dev-tools-list"></div>
+    </div>
+
+    <!-- Update tab -->
+    <div class="dev-panel" id="dev-update">
+      <div class="card">
+        <h3>Update your tool</h3>
+        <p style="color:var(--text-dim);margin-bottom:16px;font-size:14px;">
+          Describe what changed and get a new AI prompt, or paste updated JSON directly.
+        </p>
+
+        <div class="form-group">
+          <label>What should change?</label>
+          <input type="text" id="update-idea" placeholder="e.g. Add a delete function, change the output format...">
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="generateUpdatePrompt()" style="margin-bottom:20px;">Generate AI Prompt →</button>
+
+        <div id="update-prompt-box" style="display:none;margin-bottom:20px;">
+          <div style="position:relative;">
+            <div class="code-block" id="update-prompt-text" style="max-height:160px;overflow-y:auto;font-size:12px;"></div>
+            <button class="btn-copy" onclick="copyUpdatePrompt()" id="copy-update-btn" style="position:absolute;top:8px;right:8px;">Copy</button>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Paste updated JSON</label>
+          <textarea id="update-json" rows="8" placeholder='{ "source_code": "..." }'></textarea>
+          <div class="json-error" id="update-error"></div>
+        </div>
+        <button class="btn btn-red" onclick="applyUpdate()" id="update-btn">Apply Update →</button>
+        <div id="update-result" style="display:none;margin-top:16px;"></div>
+      </div>
+    </div>
+
+    <!-- Logs tab -->
+    <div class="dev-panel" id="dev-logs">
+      <div class="log-output" id="dev-logs-output">Loading...</div>
+      <button class="btn btn-outline btn-sm" onclick="refreshLogs()" style="margin-top:12px;">Refresh</button>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="goToStep('ship')">Ready to Ship →</button>
+    </div>
+  </div>
+
+  <!-- ══ STEP 3: SHIP ════════════════════════════════════ -->
+
+  <div class="section" id="section-ship">
+
+    <div id="ship-pick">
+      <h1>Ship it</h1>
+      <p class="subtitle">Deploy your MCP server to the world.</p>
+
+      <div class="deploy-card selected" onclick="selectDeploy('pinchers')" id="deploy-pinchers">
+        <div class="deploy-name">🦞 Pinchers.ai <span class="deploy-badge">Recommended</span></div>
+        <div class="deploy-desc">One-click deploy to the Pinchers marketplace. Get users immediately.</div>
+        <div class="deploy-form" id="form-pinchers">
+          <div id="pinchers-auth-area"></div>
+        </div>
+      </div>
+
+      <div class="deploy-card" onclick="selectDeploy('cloudflare')" id="deploy-cloudflare">
+        <div class="deploy-name">☁️ Cloudflare Workers</div>
+        <div class="deploy-desc">Deploy to your own Cloudflare account. Global edge, free tier.</div>
+        <div class="deploy-form" id="form-cloudflare">
+          <div class="form-group">
+            <label>API Token</label>
+            <input type="password" id="cf-token" placeholder="Your Cloudflare API token">
+            <div style="font-size: 12px; color: var(--text-light); margin-top: 4px;">
+              <a href="https://dash.cloudflare.com/profile/api-tokens" target="_blank" style="color: var(--blue);">Get your token →</a>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Account ID</label>
+            <input type="text" id="cf-account" placeholder="Your Cloudflare account ID">
+          </div>
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn btn-red" onclick="deploy()" id="deploy-btn">Deploy →</button>
+      </div>
+    </div>
+
+    <div id="ship-deploying" style="display: none;">
+      <h1>Deploying...</h1>
+      <div class="card">
+        <div class="loading-text" id="deploy-status">
+          <span class="spinner"></span> Preparing deployment...
+        </div>
+      </div>
+    </div>
+
+    <div id="ship-success" style="display: none;">
+      <div class="success-box">
+        <div class="icon">🚀</div>
+        <h2>You're live!</h2>
+        <p style="color: var(--text-dim); margin-bottom: 24px;">Your MCP server is deployed and ready for any AI agent.</p>
+        <div class="url-box" id="live-url" onclick="copyUrl()" title="Click to copy"></div>
+        <p style="font-size: 13px; color: var(--text-light); margin-top: 8px;">Click to copy</p>
+
+        <div class="card" style="text-align: left; margin-top: 32px;">
+          <h2 style="font-size: 16px; margin-bottom: 12px;">Connect from any AI</h2>
+          <p style="font-size: 14px; color: var(--text-dim); margin-bottom: 12px;">
+            Paste this into Claude, Cursor, or any MCP-compatible client:
+          </p>
+          <div class="code-block" style="font-size: 13px;" id="connect-snippet"></div>
+        </div>
+
+        <div class="card" style="text-align: left; margin-top: 16px;">
+          <h2 style="font-size: 16px; margin-bottom: 12px;">Your SDK (auto-generated)</h2>
+          <p style="font-size: 14px; color: var(--text-dim); margin-bottom: 12px;">
+            Anyone can use your tool with a simple import — no MCP knowledge needed:
+          </p>
+          <div class="code-block" style="font-size: 13px;" id="sdk-snippet"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ── State ─────────────────────────────────────────
+
+  let currentStep = 'learn';
+  let selectedDeploy = 'pinchers';
+  let projectSlug = null;
+  let generatedPromptText = '';
+  let devMode = false;
+  let updatePromptText = '';
+
+  // ── Navigation ────────────────────────────────────
+
+  function getStepOrder() {
+    return devMode ? ['learn', 'build', 'dev', 'ship'] : ['learn', 'build', 'ship'];
+  }
+
+  function goToStep(step) {
+    document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+    document.querySelectorAll('.step-dot').forEach(s => s.classList.remove('active'));
+
+    const order = getStepOrder();
+    const idx = order.indexOf(step);
+    order.forEach((s, i) => {
+      const dot = document.getElementById('step-' + s);
+      if (!dot) return;
+      if (i < idx) dot.classList.add('completed');
+      else dot.classList.remove('completed');
+    });
+
+    document.getElementById('section-' + step).classList.add('active');
+    document.getElementById('step-' + step).classList.add('active');
+    currentStep = step;
+
+    if (step === 'ship') checkAuth();
+    window.scrollTo(0, 0);
+  }
+
+  function enableDevMode() {
+    devMode = true;
+    document.getElementById('step-dev').style.display = '';
+    document.getElementById('ship-num').textContent = '4';
+  }
+
+  async function api(method, path, body) {
+    const opts = { method, headers: { 'Content-Type': 'application/json' } };
+    if (body) opts.body = JSON.stringify(body);
+    const res = await fetch(path, opts);
+    return res.json();
+  }
+
+  // ── Step 1: Demo ──────────────────────────────────
+
+  function updateDemoChat() {
+    const client = document.getElementById('demo-client').value || 'Acme Corp';
+    const amount = document.getElementById('demo-amount').value || '2,500';
+    const formatted = Number(amount).toLocaleString();
+    document.getElementById('demo-chat-text').innerHTML =
+      '&ldquo;Create me an invoice for <strong>$' + formatted + '</strong> for <strong>' + client + '</strong>&rdquo;';
+  }
+
+  function resetDemo() {
+    document.getElementById('demo-idle').style.display = '';
+    document.getElementById('demo-loading').style.display = 'none';
+    document.getElementById('demo-success').style.display = 'none';
+    document.getElementById('demo-error').style.display = 'none';
+  }
+
+  async function runDemo() {
+    const clientName = document.getElementById('demo-client').value.trim() || 'Acme Corp';
+    const itemDesc = document.getElementById('demo-desc').value.trim() || 'Website Redesign';
+    const amount = Number(document.getElementById('demo-amount').value) || 2500;
+
+    document.getElementById('demo-idle').style.display = 'none';
+    document.getElementById('demo-loading').style.display = '';
+
+    try {
+      const data = await api('POST', '/api/demo', {
+        method: 'call',
+        name: 'create_invoice',
+        args: {
+          client_name: clientName,
+          from_name: 'Pinchers Demo',
+          items: [{ description: itemDesc, quantity: 1, unit_price: amount }]
+        }
+      });
+
+      const result = data.result;
+      let text = '';
+      if (result && result.content) {
+        text = result.content.map(c => c.text || '').join('\n');
+      } else {
+        text = JSON.stringify(result, null, 2);
+      }
+
+      // Parse invoice data
+      let parsed = null;
+      try {
+        parsed = JSON.parse(text);
+        text = JSON.stringify(parsed, null, 2);
+      } catch {}
+
+      // Show raw output
+      document.getElementById('demo-output').textContent = text;
+
+      // Show link if available
+      const claimUrl = parsed?.claim_url || parsed?.view_url;
+      const invoiceNum = parsed?.invoice_number || 'INV-???';
+      const invoiceTotal = parsed?.total || ('$' + amount.toLocaleString());
+      const invoiceTo = parsed?.to || clientName;
+
+      if (claimUrl) {
+        const linkEl = document.getElementById('demo-invoice-link');
+        linkEl.href = claimUrl;
+      }
+      document.getElementById('demo-invoice-meta').textContent =
+        invoiceNum + ' · ' + invoiceTotal + ' · ' + invoiceTo;
+
+      // Show success state
+      document.getElementById('demo-loading').style.display = 'none';
+      document.getElementById('demo-success').style.display = '';
+
+      // Unlock the "Next" button
+      document.getElementById('learn-next-btn').disabled = false;
+      document.getElementById('learn-next-hint').textContent = '✓ Demo complete!';
+      document.getElementById('learn-next-hint').style.color = 'var(--green)';
+    } catch (err) {
+      document.getElementById('demo-loading').style.display = 'none';
+      document.getElementById('demo-error').style.display = '';
+      document.getElementById('demo-error-msg').textContent = '✗ ' + err.message;
+    }
+  }
+
+  // ── Step 2: Build (JSON Import) ───────────────────
+
+  function generatePrompt() {
+    const idea = document.getElementById('tool-idea').value.trim();
+    if (!idea) {
+      document.getElementById('tool-idea').focus();
+      return;
+    }
+
+    generatedPromptText = `Build me an MCP server tool that does the following:
+
+${idea}
+
+Return the result as a single JSON object with this exact format:
+
+{
+  "name": "Tool Name",
+  "slug": "tool-name",
+  "description": "What the tool does",
+  "category": "Utility",
+  "source_code": "<full TypeScript source code>"
+}
+
+The source_code must be a complete TypeScript file that:
+1. Imports McpServer from "@modelcontextprotocol/sdk/server/mcp.js" and z from "zod"
+2. Exports a function called registerTools(server: McpServer, storage: any)
+3. Inside registerTools, calls server.tool() for each tool
+4. Each tool has: name, description, Zod input schema, and async handler
+5. Handlers return { content: [{ type: "text", text: "..." }] }
+6. For JSON results, use JSON.stringify(data, null, 2) as the text
+
+Here's an example of what source_code should look like:
+
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { z } from "zod";
+
+export function registerTools(server: McpServer, storage: any) {
+  server.tool(
+    "my_tool",
+    "Does something useful",
+    { input: z.string().describe("The input") },
+    async ({ input }) => ({
+      content: [{ type: "text", text: JSON.stringify({ result: input }, null, 2) }],
+    })
+  );
+}
+
+Return ONLY the JSON object, no markdown, no explanation. The source_code field should be a single string with the complete file content.`;
+
+    document.getElementById('generated-prompt').textContent = generatedPromptText;
+    document.getElementById('prompt-card').style.display = 'block';
+    document.getElementById('prompt-card').scrollIntoView({ behavior: 'smooth' });
+  }
+
+  function copyPrompt() {
+    navigator.clipboard.writeText(generatedPromptText);
+    const btn = document.getElementById('copy-prompt-btn');
+    btn.textContent = 'Copied!';
+    setTimeout(() => { btn.textContent = 'Copy'; }, 1500);
+  }
+
+  function updateSlug() {
+    const name = document.getElementById('tool-name').value;
+    const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    document.getElementById('slug-preview').textContent = slug ? 'Slug: ' + slug : '';
+    projectSlug = slug;
+  }
+
+  async function importJSON() {
+    const jsonText = document.getElementById('json-input').value.trim();
+    const name = document.getElementById('tool-name').value.trim();
+    const errorEl = document.getElementById('json-error');
+
+    errorEl.classList.remove('visible');
+
+    if (!jsonText) {
+      errorEl.textContent = 'Please paste the JSON from the AI.';
+      errorEl.classList.add('visible');
+      return;
+    }
+
+    if (!name) {
+      errorEl.textContent = 'Please enter a project name.';
+      errorEl.classList.add('visible');
+      return;
+    }
+
+    // Parse and validate
+    let pkg;
+    try {
+      pkg = JSON.parse(jsonText);
+    } catch (e) {
+      errorEl.textContent = 'Invalid JSON: ' + e.message;
+      errorEl.classList.add('visible');
+      return;
+    }
+
+    if (!pkg.source_code) {
+      errorEl.textContent = 'JSON must have a "source_code" field with the tool code.';
+      errorEl.classList.add('visible');
+      return;
+    }
+
+    // Show install phase
+    document.getElementById('build-describe').style.display = 'none';
+    document.getElementById('build-install').style.display = 'block';
+
+    try {
+      document.getElementById('install-status').innerHTML =
+        '<span class="spinner"></span> Creating project files...';
+
+      const scaffold = await api('POST', '/api/scaffold', {
+        template: 'json-import',
+        name,
+        description: pkg.description || 'An MCP server built with pinch',
+        source_code: pkg.source_code,
+        server_files: pkg.server_files,
+        schema_sql: pkg.schema_sql,
+      });
+
+      projectSlug = scaffold.slug;
+
+      document.getElementById('install-status').innerHTML =
+        '<span class="spinner"></span> Installing dependencies (this takes ~30s)...';
+
+      const install = await api('POST', '/api/install');
+
+      if (install.error) {
+        document.getElementById('install-status').innerHTML =
+          '<span style="color: #ef4444;">✗</span> ' + install.error;
+        return;
+      }
+
+      document.getElementById('install-status').innerHTML =
+        '<span class="spinner"></span> Discovering tools...';
+
+      await new Promise(r => setTimeout(r, 2000));
+
+      const tools = await api('POST', '/api/test', { method: 'list' });
+
+      document.getElementById('build-install').style.display = 'none';
+      document.getElementById('build-test').style.display = 'block';
+
+      renderTools(tools.tools || []);
+    } catch (err) {
+      document.getElementById('install-status').innerHTML =
+        '<span style="color: #ef4444;">✗</span> Error: ' + err.message;
+    }
+  }
+
+  function renderTools(tools, containerId) {
+    containerId = containerId || 'tools-list';
+    const list = document.getElementById(containerId);
+    list.innerHTML = '';
+
+    tools.forEach(tool => {
+      const item = document.createElement('div');
+      item.className = 'tool-item';
+
+      const props = tool.inputSchema?.properties || {};
+      const required = tool.inputSchema?.required || [];
+
+      let inputsHtml = '';
+      for (const [key, prop] of Object.entries(props)) {
+        const p = prop;
+        const isReq = required.includes(key);
+        const placeholder = p.description || key;
+        let defaultVal = '';
+
+        if (key === 'name' && tools.length === 1) defaultVal = 'World';
+        if (key === 'client_name') defaultVal = 'Acme Corp';
+        if (key === 'from_name') defaultVal = 'Your Name';
+        if (key === 'items') defaultVal = '[{"description":"Website Redesign","quantity":1,"unit_price":2500}]';
+
+        inputsHtml += '<div class="tool-input">' +
+          '<label>' + key + (isReq ? ' *' : '') + ' <span style="font-weight:400;color:var(--text-light)">' + (p.type || '') + '</span></label>' +
+          '<input type="text" data-key="' + key + '" data-type="' + (p.type || 'string') + '" placeholder="' + placeholder + '" value="' + defaultVal.replace(/"/g, '&quot;') + '">' +
+          '</div>';
+      }
+
+      item.innerHTML =
+        '<div class="tool-header" onclick="toggleTool(this)">' +
+          '<div><div class="tool-name">' + tool.name + '</div>' +
+          '<div class="tool-desc">' + (tool.description || '') + '</div></div>' +
+          '<span style="color: var(--text-light)">▶</span></div>' +
+        '<div class="tool-body">' + inputsHtml +
+          '<button class="btn btn-red btn-sm" onclick="runTool(\'' + tool.name + '\', this)">Run →</button>' +
+          '<div class="tool-result" id="result-' + tool.name + '"></div></div>';
+
+      list.appendChild(item);
+    });
+
+    const first = list.querySelector('.tool-body');
+    if (first) first.classList.add('open');
+  }
+
+  function toggleTool(header) {
+    header.nextElementSibling.classList.toggle('open');
+  }
+
+  async function runTool(toolName, btn) {
+    const body = btn.closest('.tool-body');
+    const inputs = body.querySelectorAll('input[data-key]');
+    const args = {};
+
+    inputs.forEach(input => {
+      let val = input.value;
+      if (!val) return;
+
+      if (val.startsWith('[') || val.startsWith('{')) {
+        try { val = JSON.parse(val); } catch {}
+      } else if (input.dataset.type === 'number' || input.dataset.type === 'integer') {
+        val = Number(val);
+      } else if (val === 'true') val = true;
+      else if (val === 'false') val = false;
+
+      args[input.dataset.key] = val;
+    });
+
+    btn.disabled = true;
+    btn.textContent = 'Running...';
+
+    try {
+      const data = await api('POST', '/api/test', { method: 'call', name: toolName, args });
+      const resultEl = document.getElementById('result-' + toolName);
+      let text = '';
+
+      if (data.result?.content) {
+        text = data.result.content.map(c => c.text || '').join('\n');
+      } else if (data.error) {
+        text = 'Error: ' + data.error;
+      } else {
+        text = JSON.stringify(data.result, null, 2);
+      }
+
+      try { text = JSON.stringify(JSON.parse(text), null, 2); } catch {}
+
+      resultEl.textContent = text;
+      resultEl.classList.add('visible');
+    } catch (err) {
+      document.getElementById('result-' + toolName).textContent = 'Error: ' + err.message;
+      document.getElementById('result-' + toolName).classList.add('visible');
+    }
+
+    btn.disabled = false;
+    btn.textContent = 'Run →';
+  }
+
+  // ── Step 3: Ship ──────────────────────────────────
+
+  function selectDeploy(target) {
+    selectedDeploy = target;
+    document.querySelectorAll('.deploy-card').forEach(c => c.classList.remove('selected'));
+    document.getElementById('deploy-' + target).classList.add('selected');
+    document.querySelectorAll('.deploy-form').forEach(f => f.classList.remove('visible'));
+    document.getElementById('form-' + target).classList.add('visible');
+  }
+
+  async function checkAuth() {
+    const data = await api('GET', '/api/auth/check');
+    const area = document.getElementById('pinchers-auth-area');
+
+    if (data.authenticated) {
+      area.innerHTML = '<div style="display:flex;align-items:center;gap:8px;margin-top:12px;">' +
+        '<span class="badge badge-green"><span class="green-dot"></span> Logged in as ' + data.email + '</span></div>';
+    } else {
+      area.innerHTML = '<button class="btn btn-outline" onclick="startLogin()" style="margin-top:12px;">Login with Pinchers.ai →</button>';
+    }
+    selectDeploy('pinchers');
+  }
+
+  async function startLogin() {
+    const area = document.getElementById('pinchers-auth-area');
+    area.innerHTML = '<div class="loading-text"><span class="spinner"></span> Opening browser for login...</div>';
+
+    const data = await api('POST', '/api/auth/start');
+    if (data.authenticated) {
+      area.innerHTML = '<span class="badge badge-green"><span class="green-dot"></span> Logged in as ' + data.email + '</span>';
+      return;
+    }
+
+    area.innerHTML = '<div class="loading-text"><span class="spinner"></span> Waiting for you to confirm in the browser...</div>';
+
+    for (let i = 0; i < 60; i++) {
+      await new Promise(r => setTimeout(r, 2000));
+      const poll = await api('GET', '/api/auth/poll?code=' + data.code);
+      if (poll.authenticated) {
+        area.innerHTML = '<span class="badge badge-green"><span class="green-dot"></span> Logged in as ' + poll.email + '</span>';
+        return;
+      }
+      if (poll.error) {
+        area.innerHTML = '<span class="badge badge-red">✗ ' + poll.error + '</span>';
+        return;
+      }
+    }
+    area.innerHTML = '<span class="badge badge-red">✗ Timed out. Try again.</span>';
+  }
+
+  async function deploy() {
+    const btn = document.getElementById('deploy-btn');
+    btn.disabled = true;
+
+    document.getElementById('ship-pick').style.display = 'none';
+    document.getElementById('ship-deploying').style.display = 'block';
+
+    const body = { target: selectedDeploy };
+
+    if (selectedDeploy === 'cloudflare') {
+      body.cfToken = document.getElementById('cf-token').value;
+      body.cfAccountId = document.getElementById('cf-account').value;
+      if (!body.cfToken || !body.cfAccountId) {
+        document.getElementById('deploy-status').innerHTML = '<span style="color:#ef4444;">✗</span> API Token and Account ID are required';
+        document.getElementById('ship-deploying').style.display = 'none';
+        document.getElementById('ship-pick').style.display = 'block';
+        btn.disabled = false;
+        return;
+      }
+    }
+
+    try {
+      await api('POST', '/api/deploy', body);
+
+      for (let i = 0; i < 120; i++) {
+        await new Promise(r => setTimeout(r, 2000));
+        const status = await api('GET', '/api/deploy/status');
+        document.getElementById('deploy-status').innerHTML = '<span class="spinner"></span> ' + status.message;
+
+        if (status.done) {
+          if (status.error) {
+            document.getElementById('deploy-status').innerHTML = '<span style="color:#ef4444;">✗</span> ' + status.error;
+          } else {
+            showSuccess(status.url);
+          }
+          return;
+        }
+      }
+      document.getElementById('deploy-status').innerHTML = '<span style="color:#ef4444;">✗</span> Deployment timed out';
+    } catch (err) {
+      document.getElementById('deploy-status').innerHTML = '<span style="color:#ef4444;">✗</span> ' + err.message;
+    }
+  }
+
+  function showSuccess(url) {
+    document.getElementById('ship-deploying').style.display = 'none';
+    document.getElementById('ship-success').style.display = 'block';
+
+    const mcpUrl = url + '/mcp';
+    const slug = projectSlug || 'my-tool';
+
+    document.getElementById('live-url').textContent = mcpUrl;
+    document.getElementById('connect-snippet').textContent =
+      'MCP Endpoint: ' + mcpUrl + '\n\nPaste this URL into any MCP-compatible AI client\n(Claude Desktop, Cursor, Windsurf, etc.)';
+
+    document.getElementById('sdk-snippet').textContent =
+      'import { MCPClient } from \'mcp-ez\';\n\n' +
+      'const client = new MCPClient(\'' + mcpUrl + '\');\n' +
+      'await client.connect();\n' +
+      'const result = await client.call(\'tool_name\', { /* args */ });';
+
+    document.getElementById('step-ship').classList.add('completed');
+  }
+
+  function copyUrl() {
+    const url = document.getElementById('live-url').textContent;
+    navigator.clipboard.writeText(url);
+    document.getElementById('live-url').style.background = '#166534';
+    setTimeout(() => { document.getElementById('live-url').style.background = ''; }, 500);
+  }
+
+  function toggleCollapsible(toggle) {
+    toggle.classList.toggle('open');
+    toggle.nextElementSibling.classList.toggle('open');
+  }
+
+  // ── Dev Mode ───────────────────────────────────────
+
+  function switchDevTab(tab) {
+    document.querySelectorAll('.dev-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.dev-panel').forEach(p => p.classList.remove('active'));
+    document.querySelector('.dev-tab[onclick*="' + tab + '"]').classList.add('active');
+    document.getElementById('dev-' + tab).classList.add('active');
+  }
+
+  async function refreshLogs() {
+    try {
+      const data = await api('GET', '/api/logs');
+      const el = document.getElementById('dev-logs-output');
+      el.textContent = (data.logs || []).join('\n') || 'No logs yet.';
+      el.scrollTop = el.scrollHeight;
+    } catch {}
+  }
+
+  function generateUpdatePrompt() {
+    const idea = document.getElementById('update-idea').value.trim();
+    if (!idea) { document.getElementById('update-idea').focus(); return; }
+
+    updatePromptText = `I have an existing MCP server tool. Please update it with the following changes:
+
+${idea}
+
+Return the result as a JSON object with this format:
+{
+  "source_code": "<updated full TypeScript source code>"
+}
+
+The source_code must be a complete replacement file that:
+1. Imports McpServer from "@modelcontextprotocol/sdk/server/mcp.js" and z from "zod"
+2. Exports a function called registerTools(server: McpServer, storage: any)
+3. Inside registerTools, calls server.tool() for each tool
+4. Handlers return { content: [{ type: "text", text: "..." }] }
+
+Return ONLY the JSON object, no markdown.`;
+
+    document.getElementById('update-prompt-text').textContent = updatePromptText;
+    document.getElementById('update-prompt-box').style.display = 'block';
+  }
+
+  function copyUpdatePrompt() {
+    navigator.clipboard.writeText(updatePromptText);
+    const btn = document.getElementById('copy-update-btn');
+    btn.textContent = 'Copied!';
+    setTimeout(() => { btn.textContent = 'Copy'; }, 1500);
+  }
+
+  async function applyUpdate() {
+    const jsonText = document.getElementById('update-json').value.trim();
+    const errorEl = document.getElementById('update-error');
+    errorEl.classList.remove('visible');
+
+    if (!jsonText) {
+      errorEl.textContent = 'Please paste the updated JSON.';
+      errorEl.classList.add('visible');
+      return;
+    }
+
+    let pkg;
+    try { pkg = JSON.parse(jsonText); }
+    catch (e) { errorEl.textContent = 'Invalid JSON: ' + e.message; errorEl.classList.add('visible'); return; }
+
+    if (!pkg.source_code) {
+      errorEl.textContent = 'JSON must have a "source_code" field.';
+      errorEl.classList.add('visible');
+      return;
+    }
+
+    const btn = document.getElementById('update-btn');
+    btn.disabled = true; btn.textContent = 'Updating...';
+
+    try {
+      const result = await api('POST', '/api/update', {
+        source_code: pkg.source_code,
+        server_files: pkg.server_files,
+        schema_sql: pkg.schema_sql,
+      });
+
+      btn.disabled = false; btn.textContent = 'Apply Update →';
+
+      if (result.error) {
+        errorEl.textContent = result.error;
+        errorEl.classList.add('visible');
+        return;
+      }
+
+      const resultEl = document.getElementById('update-result');
+      resultEl.style.display = 'block';
+      resultEl.innerHTML = '<div class="badge badge-green" style="margin-bottom:8px;">✓ ' +
+        (result.changes || []).length + ' file(s) updated</div>' +
+        '<div style="font-size:13px;color:var(--text-dim);">' +
+        (result.changes || []).map(c => '• ' + c).join('<br>') +
+        '<br><br>Hot-reloading... switch to Test tab to try it.</div>';
+
+      // Reload tools after hot-reload settles
+      setTimeout(async () => {
+        try {
+          const tools = await api('POST', '/api/test', { method: 'list' });
+          renderTools(tools.tools || [], 'dev-tools-list');
+        } catch {}
+      }, 3000);
+    } catch (err) {
+      btn.disabled = false; btn.textContent = 'Apply Update →';
+      errorEl.textContent = 'Error: ' + err.message;
+      errorEl.classList.add('visible');
+    }
+  }
+
+  // ── Project Detection (runs on page load) ──────────
+
+  async function checkProject() {
+    try {
+      const data = await api('GET', '/api/project');
+      if (data.exists) {
+        enableDevMode();
+        projectSlug = data.slug;
+
+        // Go straight to Dev mode
+        goToStep('dev');
+
+        // Wait a moment for dev server to be ready
+        await new Promise(r => setTimeout(r, 2000));
+
+        // Load tools
+        try {
+          const tools = await api('POST', '/api/test', { method: 'list' });
+          renderTools(tools.tools || [], 'dev-tools-list');
+        } catch {
+          document.getElementById('dev-tools-list').innerHTML =
+            '<div class="card"><p style="color:var(--text-dim)">Dev server starting... <button class="btn btn-outline btn-sm" onclick="reloadDevTools()">Retry</button></p></div>';
+        }
+
+        refreshLogs();
+      }
+    } catch {}
+  }
+
+  async function reloadDevTools() {
+    try {
+      const tools = await api('POST', '/api/test', { method: 'list' });
+      renderTools(tools.tools || [], 'dev-tools-list');
+    } catch (err) {
+      document.getElementById('dev-tools-list').innerHTML =
+        '<div class="card"><p style="color:#ef4444">Error: ' + err.message + ' <button class="btn btn-outline btn-sm" onclick="reloadDevTools()">Retry</button></p></div>';
+    }
+  }
+
+  // Run project check on page load
+  checkProject();
+</script>
+
+</body>
+</html>
