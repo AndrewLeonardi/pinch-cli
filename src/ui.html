@@ -901,45 +901,100 @@
       return;
     }
 
-    generatedPromptText = `Build me an MCP server tool that does the following:
+    generatedPromptText = `Build me a Pinchers app that does the following:
 
 ${idea}
 
-Return the result as a single JSON object with this exact format:
+Return the result as a single JSON object with this exact structure:
 
 {
-  "name": "Tool Name",
-  "slug": "tool-name",
-  "description": "What the tool does",
+  "name": "App Name",
+  "slug": "app-name",
+  "description": "What the app does",
   "category": "Utility",
-  "source_code": "<full TypeScript source code>"
+  "source_code": "<full TypeScript source — see technical spec below>",
+  "server_files": { "path/file.ts": "<source>" },
+  "schema_sql": "<optional SQL schema for database>",
+  "ui_files": { "index.html": "<custom web interface>" }
 }
 
-The source_code must be a complete TypeScript file that:
-1. Imports McpServer from "@modelcontextprotocol/sdk/server/mcp.js" and z from "zod"
-2. Exports a function called registerTools(server: McpServer, storage: any)
-3. Inside registerTools, calls server.tool() for each tool
-4. Each tool has: name, description, Zod input schema, and async handler
-5. Handlers return { content: [{ type: "text", text: "..." }] }
-6. For JSON results, use JSON.stringify(data, null, 2) as the text
+FIELD GUIDE:
+- source_code (REQUIRED): The main tool logic file. See technical spec below.
+- server_files (OPTIONAL): Additional TypeScript modules imported by source_code. Use for helper functions, data, etc. Keys are paths like "utils/helpers.ts".
+- schema_sql (OPTIONAL): SQL CREATE TABLE statements if the app needs a database.
+- ui_files (OPTIONAL but RECOMMENDED): A custom web interface. The key should be "index.html" containing a complete HTML page. The UI can call tools via window.pinchers.callTool(toolName, args) which returns a promise. window.pinchers.ready is a promise that resolves when the connection is established — await it before calling tools.
+- category: One of "Productivity", "Finance", "Marketing", "Design", "Development", "Communication", "Data & Analytics", "Content", "Education", "Health & Fitness", "Events & Planning", "Legal", "Sales", "HR & Recruiting", "Utility"
 
-Here's an example of what source_code should look like:
+TECHNICAL SPEC FOR source_code:
+The source_code must be a TypeScript file that:
+1. Imports McpServer from "@modelcontextprotocol/sdk/server/mcp.js" and z from "zod"
+2. Exports a function: registerTools(server: McpServer, storage: any)
+3. Inside registerTools, calls server.tool() for each tool
+4. Each server.tool() call takes: name, description, Zod input schema object, async handler
+5. Handlers return { content: [{ type: "text", text: "..." }] }
+6. For structured results, use JSON.stringify(data, null, 2) as the text
+7. Use storage.get(key)/storage.set(key, value) to persist data across calls
+
+Example source_code:
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
 export function registerTools(server: McpServer, storage: any) {
   server.tool(
-    "my_tool",
-    "Does something useful",
-    { input: z.string().describe("The input") },
-    async ({ input }) => ({
-      content: [{ type: "text", text: JSON.stringify({ result: input }, null, 2) }],
-    })
+    "create_item",
+    "Create a new item",
+    {
+      name: z.string().describe("Item name"),
+      tags: z.array(z.string()).optional().describe("Tags"),
+    },
+    async ({ name, tags }) => {
+      const items = (await storage.get("items")) || [];
+      const item = { id: Date.now().toString(36), name, tags: tags || [] };
+      items.push(item);
+      await storage.set("items", items);
+      return { content: [{ type: "text", text: JSON.stringify(item, null, 2) }] };
+    }
+  );
+
+  server.tool(
+    "list_items",
+    "List all items",
+    {},
+    async () => {
+      const items = (await storage.get("items")) || [];
+      return { content: [{ type: "text", text: JSON.stringify(items, null, 2) }] };
+    }
   );
 }
 
-Return ONLY the JSON object, no markdown, no explanation. The source_code field should be a single string with the complete file content.`;
+UI FILE GUIDE (for ui_files["index.html"]):
+- Include ALL HTML, CSS, and JavaScript in one file
+- Use window.pinchers.callTool(name, args) to call your tools
+- Await window.pinchers.ready before making calls
+- Style it nicely — this is what users see
+
+Example ui_files["index.html"] pattern:
+<!DOCTYPE html>
+<html><head><style>
+  * { margin: 0; box-sizing: border-box; }
+  body { font-family: system-ui, sans-serif; padding: 24px; max-width: 720px; margin: 0 auto; }
+  button { cursor: pointer; }
+</style></head><body>
+  <h1>My App</h1>
+  <div id="app"></div>
+  <script>
+    async function init() {
+      await window.pinchers.ready;
+      // App logic here — call tools with:
+      // const result = await window.pinchers.callTool("tool_name", { arg: "value" });
+      // result is { content: [{ type: "text", text: "..." }] }
+    }
+    init();
+  </script>
+</body></html>
+
+Return ONLY the JSON object, no markdown, no explanation.`;
 
     document.getElementById('generated-prompt').textContent = generatedPromptText;
     document.getElementById('prompt-card').style.display = 'block';
