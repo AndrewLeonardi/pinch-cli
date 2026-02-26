@@ -35,7 +35,7 @@ interface AppState {
   devServerLogs: string[];
   demoSession: McpSession | null;
   testSession: McpSession | null;
-  deployStatus: { stage: string; message: string; done: boolean; url?: string; error?: string } | null;
+  deployStatus: { stage: string; message: string; done: boolean; url?: string; mcpUrl?: string; error?: string } | null;
 }
 
 const state: AppState = {
@@ -425,7 +425,7 @@ async function handleDeploy(req: IncomingMessage, res: ServerResponse) {
         state.deployStatus = { stage, message, done: false };
       },
     }).then((result) => {
-      state.deployStatus = { stage: "done", message: "Published!", done: true, url: result.url };
+      state.deployStatus = { stage: "done", message: "Published!", done: true, url: result.url, mcpUrl: result.mcpUrl };
     }).catch((err) => {
       state.deployStatus = { stage: "error", message: err.message, done: true, error: err.message };
     });

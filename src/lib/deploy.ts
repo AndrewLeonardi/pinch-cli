@@ -197,7 +197,7 @@ interface PinchersDeployOpts {
   onProgress: (stage: string, message: string) => void;
 }
 
-export async function deployToPinchers(opts: PinchersDeployOpts): Promise<{ url: string; slug: string }> {
+export async function deployToPinchers(opts: PinchersDeployOpts): Promise<{ url: string; mcpUrl: string; slug: string }> {
   const { projectDir, apiKey, onProgress } = opts;
 
   // Read manifest
@@ -272,6 +272,7 @@ export async function deployToPinchers(opts: PinchersDeployOpts): Promise<{ url:
     return {
       slug: json.slug,
       url: `${platformUrl}/browse/${json.slug}`,
+      mcpUrl: `${platformUrl}/api/mcp/${json.slug}`,
     };
   } else {
     const err = (await res.json()) as { error: string };

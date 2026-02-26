@@ -1223,7 +1223,7 @@ Return ONLY the JSON object, no markdown, no explanation. The source_code field 
           if (status.error) {
             document.getElementById('deploy-status').innerHTML = '<span style="color:#ef4444;">✗</span> ' + status.error;
           } else {
-            showSuccess(status.url);
+            showSuccess(status.url, status.mcpUrl);
           }
           return;
         }
@@ -1234,16 +1234,18 @@ Return ONLY the JSON object, no markdown, no explanation. The source_code field 
     }
   }
 
-  function showSuccess(url) {
+  function showSuccess(url, mcpUrlOverride) {
     document.getElementById('ship-deploying').style.display = 'none';
     document.getElementById('ship-success').style.display = 'block';
 
-    const mcpUrl = url + '/mcp';
-    const slug = projectSlug || 'my-tool';
+    // Pinchers deploy passes mcpUrl directly; Cloudflare appends /mcp
+    const mcpUrl = mcpUrlOverride || (url + '/mcp');
+    const browseUrl = url;
 
     document.getElementById('live-url').textContent = mcpUrl;
     document.getElementById('connect-snippet').textContent =
-      'MCP Endpoint: ' + mcpUrl + '\n\nPaste this URL into any MCP-compatible AI client\n(Claude Desktop, Cursor, Windsurf, etc.)';
+      'MCP Endpoint: ' + mcpUrl + '\n\nPaste this URL into any MCP-compatible AI client\n(Claude Desktop, Cursor, Windsurf, etc.)' +
+      (mcpUrlOverride ? '\n\nMarketplace: ' + browseUrl : '');
 
     document.getElementById('sdk-snippet').textContent =
       'import { MCPClient } from \'mcp-ez\';\n\n' +
