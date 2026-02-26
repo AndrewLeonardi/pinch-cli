@@ -1,263 +1,485 @@
 <div align="center">
   <h1>pinch</h1>
-  <p><strong>Build, test, and deploy MCP servers with custom frontends — from your terminal.</strong></p>
+  <p><strong>Build tools for AI agents. No experience required.</strong></p>
 
   <a href="https://www.npmjs.com/package/pinch-cli"><img src="https://img.shields.io/npm/v/pinch-cli" alt="npm version" /></a>
   <a href="https://www.npmjs.com/package/pinch-cli"><img src="https://img.shields.io/npm/dm/pinch-cli" alt="downloads" /></a>
   <a href="https://github.com/AndrewLeonardi/pinch-cli/blob/main/LICENSE"><img src="https://img.shields.io/github/license/AndrewLeonardi/pinch-cli" alt="license" /></a>
-  <a href="https://github.com/AndrewLeonardi/pinch-cli/actions"><img src="https://img.shields.io/github/actions/workflow/status/AndrewLeonardi/pinch-cli/ci.yml" alt="CI" /></a>
 </div>
 
 ---
 
-## Quick Start
-
-```bash
-npx pinch-cli init my-tool
-cd my-tool
-pinch dev
-```
-
-That's it. You have a running MCP server with a playground UI at `http://localhost:3100`.
-
 ## What is Pinch?
 
-Pinch is the fastest way to go from an idea to a deployed MCP server. It handles scaffolding, local development, testing, and one-command deployment to Cloudflare Workers — with optional custom frontends, databases, and storage.
+Pinch lets you create tools that AI assistants like Claude and ChatGPT can use. Describe what you want, AI writes the code, and Pinch handles everything else — testing, deploying, hosting.
 
-**MCP** (Model Context Protocol) is the standard for giving AI agents tools. Every MCP server you build with Pinch can be used by Claude, ChatGPT, and any MCP-compatible AI client.
+**You don't need to be a developer.** If you can describe what a tool should do in plain English, you can build one.
 
-## Why Pinch?
+### What can you build?
 
-| Without Pinch | With Pinch |
-|---------------|-----------|
-| Write MCP server code from scratch | `pinch init` — pick a template, start coding |
-| Build a separate frontend | Templates include UI + bridge API built-in |
-| Figure out Cloudflare/AWS deployment | `pinch deploy` — one command, auto-provisions everything |
-| Manually provision D1 databases | Auto-detected from your code, provisioned on deploy |
-| Set up KV storage yourself | `storage.get/set` — just works locally and in production |
-| No way to test MCP compliance | `pinch test` — validates manifest + runs contract tests |
-| JSON-RPC debugging in curl | `pinch dev` — interactive REPL + browser playground |
+Anything you'd want an AI to do for you:
 
-## Features
+- Generate invoices, reports, or documents
+- Look up data from APIs (weather, stocks, etc.)
+- Manage tasks, notes, or projects
+- Create party invitations
+- Process and analyze data
+- ...anything you can describe
 
-- **7 starter templates** — Hello World, Full Stack (with UI), Invoice Tool, API Client, Task Manager, Weather Dashboard, AI Chat
-- **Custom frontends** — Add a `ui/` directory with HTML/CSS/JS or React/Vue/Svelte. The bridge API (`window.pinch.callTool()`) connects your UI to MCP tools
-- **AI-first workflow** — Run `pinch prompt`, paste into Claude/ChatGPT, get back a complete tool package, import with `pinch import`
-- **One-command deploy** — `pinch deploy` ships to Cloudflare Workers with auto-provisioned D1 databases, KV storage, and Durable Objects
-- **Built-in testing** — `pinch test` validates your manifest, initializes MCP sessions, and contract-tests every tool
-- **Interactive REPL** — `pinch dev` gives you a playground UI + terminal REPL for calling tools
-- **Docker support** — `pinch deploy docker` generates Dockerfile + docker-compose for self-hosting
-- **Optional marketplace** — `pinch deploy pinchers` publishes to [Pinchers.ai](https://pinchers.ai) with built-in monetization (90/10 creator split)
+---
+
+## Quick Start (5 minutes)
+
+### Prerequisites
+
+You need **Node.js** installed on your computer. If you don't have it:
+
+1. Go to [nodejs.org](https://nodejs.org)
+2. Download the **LTS** version (the big green button)
+3. Run the installer
+4. Open your terminal (Terminal on Mac, Command Prompt on Windows)
+5. Type `node --version` and press Enter — you should see a version number
+
+### Create Your First Tool
+
+Open your terminal and run:
+
+```bash
+npx pinch-cli init my-first-tool
+```
+
+> **What's happening?** `npx` downloads and runs Pinch. `init` means "create a new project." `my-first-tool` is the name.
+
+You'll be asked a few questions:
+
+1. **Description** — What does your tool do? (e.g., "Generates greeting messages")
+2. **Category** — Pick one from the list
+3. **Template** — Start with **Hello World** for your first time
+
+Pinch creates a folder with all the files you need.
+
+### Run It Locally
+
+```bash
+cd my-first-tool
+npx pinch-cli dev
+```
+
+Two things happen:
+
+1. **A browser window opens** with a playground where you can test your tool
+2. **Your terminal becomes interactive** — you can type commands to call your tool
+
+Try typing this in the terminal:
+
+```
+hello name=World
+```
+
+You should see: `Hello, World!`
+
+That's it — you have a working tool!
+
+---
+
+## The AI-First Way to Build (Recommended)
+
+The fastest way to build a tool is to let AI do the coding. Here's how:
+
+### Step 1: Generate a prompt
+
+```bash
+npx pinch-cli prompt "a tool that creates party invitations with themes and guest lists"
+```
+
+This copies a carefully crafted prompt to your clipboard.
+
+### Step 2: Paste into Claude or ChatGPT
+
+Open your favorite AI assistant and paste the prompt. The AI will generate a complete tool package — a big block of JSON with all the code.
+
+### Step 3: Save the AI's output
+
+Copy the JSON the AI gave you and save it to a file called `package.json` (or any name ending in `.json`).
+
+### Step 4: Import it
+
+```bash
+npx pinch-cli import package.json
+```
+
+Pinch reads the JSON, creates a full project folder, and installs everything.
+
+### Step 5: Test it
+
+```bash
+cd party-invitations
+npx pinch-cli dev
+```
+
+Your new tool is running! Try it in the browser playground or the terminal REPL.
+
+### Step 6: Deploy it
+
+```bash
+npx pinch-cli deploy
+```
+
+Pick where you want to host it (more on that below), and your tool is live.
+
+---
 
 ## Commands
 
-| Command | Description |
-|---------|------------|
-| `pinch init [name]` | Create a new MCP server project from a template |
-| `pinch dev` | Start local dev server with hot reload, playground UI, and REPL |
-| `pinch test` | Validate manifest + run contract tests against your tools |
-| `pinch deploy [target]` | Deploy to Cloudflare Workers, Docker, or Pinchers.ai |
-| `pinch import [file]` | Import a JSON tool package (from AI output) into a project |
-| `pinch export` | Export current project as a portable JSON package |
-| `pinch prompt [description]` | Generate an AI prompt for building a new tool |
-| `pinch login` | Authenticate with Pinchers.ai (optional, for marketplace) |
+Here's what each command does:
 
-## How It Works
+### `pinch init [name]`
 
-### The AI-First Workflow
+**Creates a new project from a template.**
 
-The fastest path from idea to deployed tool:
-
-```
-1. pinch prompt "a tool that generates invoices"
-2. Paste the prompt into Claude/ChatGPT
-3. AI outputs a JSON package
-4. pinch import package.json
-5. pinch dev          # test locally
-6. pinch deploy       # ship to production
+```bash
+npx pinch-cli init my-tool
 ```
 
-### The Traditional Workflow
+You pick a template, answer a few questions, and get a ready-to-run project. Available templates:
 
+| Template | Best for |
+|----------|---------|
+| **Hello World** | Learning the basics. One simple tool. |
+| **Full Stack** | Tools with a custom web interface (HTML/CSS) |
+| **Invoice Tool** | Generating documents with line items and calculations |
+| **API Client** | Fetching data from external websites and APIs |
+| **Task Manager** | Tools that need to save and retrieve data |
+| **Weather Dashboard** | Polished UI with external data (showcase) |
+| **AI Chat** | Chat interfaces that wrap AI APIs (showcase) |
+
+### `pinch dev`
+
+**Starts your tool locally for testing.**
+
+```bash
+npx pinch-cli dev
 ```
-1. pinch init my-tool       # scaffold from template
-2. Edit src/tools.ts        # add your MCP tools
-3. Edit ui/index.html       # customize the frontend (optional)
-4. pinch dev                # develop with hot reload
-5. pinch test               # validate everything works
-6. pinch deploy cloudflare  # deploy to the edge
+
+This does three things:
+
+1. Starts your tool server (usually at `http://localhost:3100`)
+2. Opens a browser playground where you can test your tools visually
+3. Gives you a terminal REPL (command line) for quick testing
+
+**REPL commands you can type:**
+
+| Command | What it does |
+|---------|-------------|
+| `list` | Shows all available tools |
+| `info <tool>` | Shows what inputs a tool expects |
+| `<tool> key=value` | Runs a tool (e.g., `hello name=Alice`) |
+| `verbose` | Shows the raw data being sent/received |
+| `quit` | Stops the server and exits |
+
+**Useful flags:**
+
+| Flag | What it does |
+|------|-------------|
+| `--port 3200` | Use a different port (if 3100 is busy) |
+| `--no-browser` | Don't auto-open the browser |
+| `--verbose` | Show full request/response data |
+
+### `pinch test`
+
+**Checks that everything works correctly.**
+
+```bash
+npx pinch-cli test
 ```
 
-### What Gets Deployed
+Runs three checks:
 
-When you run `pinch deploy cloudflare`, Pinch:
+1. **Manifest check** — Makes sure your `pinch.toml` config file has all required fields
+2. **Tool check** — Starts your server, discovers your tools, calls each one, and verifies the response
+3. **Custom tests** — Runs any test cases you've defined in `pinch.toml`
 
-1. Reads your `src/tools.ts` and detects what infrastructure you need
-2. If you use `storage.get/set` — provisions a Cloudflare KV namespace
-3. If you use `env.DB` — provisions a Cloudflare D1 database
-4. If you have `schema.sql` — runs the migration on D1
-5. Generates a Cloudflare Worker with Durable Objects for multi-session MCP
-6. Deploys with `wrangler` and gives you a live URL
+If everything passes, you'll see green checkmarks. If something fails, you'll get a clear error message explaining what's wrong.
 
-The entire process takes about 15 seconds.
+### `pinch prompt [description]`
 
-## Templates
+**Generates a prompt you can paste into Claude/ChatGPT to build a tool.**
 
-### Hello World
-Minimal MCP server with a single tool. Start here to learn the basics.
+```bash
+npx pinch-cli prompt "a tool that converts currencies"
+```
 
-### Full Stack
-MCP server + custom HTML/CSS frontend connected via the bridge API. Includes the "Build with AI" workflow for generating tools with LLMs.
+The prompt tells the AI exactly what format to output. You paste it, the AI gives you code, and you import it with `pinch import`.
 
-### Invoice Tool
-A real-world tool that generates professional invoices with line items, tax calculations, and discounts.
+### `pinch import [file]`
 
-### API Client
-HTTP tools for fetching JSON, scraping text, and checking URLs. Shows how to make external API calls from MCP tools.
+**Turns a JSON tool package into a full project.**
 
-### Task Manager
-Full CRUD operations with persistent storage. Demonstrates `storage.get/set/delete/keys` for stateful tools.
+```bash
+npx pinch-cli import my-tool.json
+```
 
-### Weather Dashboard
-Showcase template with a polished UI featuring weather data display. Demonstrates external API integration + UI bridge.
+This is how you take AI-generated code and turn it into a real project with all the files you need.
 
-### AI Chat
-Chat interface template that wraps LLM API calls. Demonstrates streaming, session state, and the bridge API.
+You can also pipe JSON directly:
 
-## Bridge API
+```bash
+cat ai-output.json | npx pinch-cli import
+```
 
-When you add a `ui/` directory, Pinch automatically injects the bridge script into your HTML. Your frontend code gets access to:
+### `pinch export`
+
+**Packages your project into a single JSON file.**
+
+```bash
+npx pinch-cli export -o my-tool-backup.json
+```
+
+Useful for sharing your project or backing it up. Reverse of `import`.
+
+### `pinch deploy [target]`
+
+**Puts your tool on the internet so anyone (or any AI) can use it.**
+
+```bash
+npx pinch-cli deploy
+```
+
+You'll be asked where to deploy:
+
+#### Option 1: Cloudflare Workers (Recommended)
+
+Free hosting on Cloudflare's global network. Your tool runs in 300+ cities worldwide.
+
+**First time setup:**
+1. Create a free account at [cloudflare.com](https://cloudflare.com)
+2. Go to your profile > API Tokens > Create Token
+3. Pinch will ask for your token and account ID
+4. Credentials are saved for future deploys
+
+**What Pinch handles automatically:**
+- Creates the hosting infrastructure
+- Sets up databases if your tool needs one
+- Sets up storage if your tool saves data
+- Deploys your code
+- Gives you a live URL
+
+**After deploy, you'll get:**
+```
+Live URL:     https://my-tool.your-account.workers.dev
+MCP endpoint: https://my-tool.your-account.workers.dev/mcp
+```
+
+Any AI agent can now use your tool at that URL.
+
+#### Option 2: Docker
+
+Generates files so you can host your tool anywhere — your own server, AWS, Google Cloud, etc.
+
+```bash
+npx pinch-cli deploy docker
+docker compose up
+```
+
+#### Option 3: Pinchers.ai Marketplace
+
+Publish to the [Pinchers.ai](https://pinchers.ai) app store. Other people can discover and use your tool, and **you earn money** when they do.
+
+```bash
+npx pinch-cli login
+npx pinch-cli deploy pinchers
+```
+
+- You set the price (e.g., 5 credits per use)
+- You keep 90% of every credit spent
+- Payouts via Stripe to your bank account
+
+### `pinch login`
+
+**Connects your terminal to your Pinchers.ai account.**
+
+```bash
+npx pinch-cli login
+```
+
+Opens a browser window to sign in. After confirming, your terminal is authenticated. You only need to do this once — for publishing tools to the marketplace.
+
+---
+
+## Key Concepts (Explained Simply)
+
+### What is MCP?
+
+**MCP** stands for Model Context Protocol. It's a standard created by Anthropic (the makers of Claude) that lets AI assistants use external tools.
+
+Without MCP, an AI can only chat. With MCP, an AI can actually *do things* — generate invoices, look up weather data, manage your tasks, etc.
+
+When you build a tool with Pinch, you're creating an MCP server. That means Claude, ChatGPT, and other AI assistants can automatically discover and use your tool.
+
+**You don't need to understand how MCP works.** Pinch handles all the protocol stuff. You just define what your tool does.
+
+### What is a "tool"?
+
+A tool is a function that takes some inputs and produces some output. For example:
+
+- **Input:** Client name + amount → **Output:** A professional invoice
+- **Input:** City name → **Output:** Current weather data
+- **Input:** Party details → **Output:** A beautiful invitation
+
+Each Pinch project can have multiple tools. An "Invoice Generator" project might have tools for `create_invoice`, `add_line_item`, and `calculate_total`.
+
+### What is the Bridge API?
+
+If your tool has a custom web interface (HTML/CSS in the `ui/` folder), the Bridge API is how your frontend talks to your backend.
 
 ```javascript
-// Call an MCP tool
-const result = await window.pinch.callTool("generate_invoice", {
+// In your HTML/JavaScript:
+const result = await window.pinch.callTool("create_invoice", {
   client: "Acme Corp",
-  amount: 1500
+  amount: 2500
 });
-
-// List available tools
-const tools = await window.pinch.listTools();
-
-// Save an artifact (shareable output)
-await window.pinch.saveArtifact({
-  type: "invoice",
-  data: invoiceData,
-  label: "Invoice #1234"
-});
-
-// File storage (paid tools only)
-await window.pinch.uploadFile(file, "receipts/january.pdf");
-const url = window.pinch.getFileUrl("receipts/january.pdf");
-
-// Theme tokens for consistent styling
-const { colors, fonts } = window.pinch.theme;
 ```
 
-## Storage
+It's one line of code to call any of your tools from a button click, form submit, etc.
 
-Pinch provides a simple key-value storage API that works the same locally and in production:
+### What is Storage?
+
+Some tools need to remember things between uses (like a task list or saved settings). Pinch gives you a simple storage system:
 
 ```typescript
-// In your tools.ts
-export function registerTools(server: McpServer, storage: Storage) {
-  server.tool("save_note", { title: z.string(), body: z.string() }, async ({ title, body }) => {
-    await storage.set(`notes:${title}`, JSON.stringify({ title, body, created: Date.now() }));
-    return { content: [{ type: "text", text: `Saved "${title}"` }] };
-  });
-}
+await storage.set("my-key", "my-value");    // Save
+const value = await storage.get("my-key");   // Load
+await storage.delete("my-key");              // Delete
 ```
 
-- **Local dev**: Stores in `.pinch-data.json` (auto-created)
-- **Cloudflare**: Uses KV namespace (auto-provisioned on deploy)
+Locally, this saves to a file. In production, it uses Cloudflare's global storage. You don't need to set anything up — it just works.
 
-## Deploying
+---
 
-### Cloudflare Workers (recommended)
+## Project Structure
 
-```bash
-pinch deploy cloudflare
+After running `pinch init`, your project folder looks like this:
+
+```
+my-tool/
+  src/
+    tools.ts       ← Your tool logic lives here
+    index.ts       ← Dev server (don't need to touch this)
+  ui/
+    index.html     ← Custom web interface (optional)
+  pinch.toml       ← Project settings (name, description, etc.)
+  package.json     ← Node.js stuff (managed automatically)
+  wrangler.toml    ← Cloudflare config (managed automatically)
+  schema.sql       ← Database setup (optional, if you need one)
 ```
 
-First run prompts for your Cloudflare API token and Account ID. Credentials are saved to `~/.pinchrc` for future deploys.
+**The only file you really need to care about is `src/tools.ts`.** That's where your tool logic goes. Everything else is configuration that Pinch manages for you.
 
-### Docker
+---
 
-```bash
-pinch deploy docker
-```
+## Adding Tests
 
-Generates `Dockerfile`, `.dockerignore`, and `docker-compose.yml`. Build and run anywhere.
-
-### Pinchers.ai Marketplace
-
-```bash
-pinch login
-pinch deploy pinchers
-```
-
-Publishes your tool to the [Pinchers.ai](https://pinchers.ai) marketplace with:
-- Credit-based monetization (you set the price per use)
-- 90/10 revenue split (creator gets 90%)
-- Stripe Connect payouts ($50 minimum)
-- Built-in user management, analytics, and MCP proxy
-
-## Testing
-
-```bash
-pinch test
-```
-
-Runs three phases:
-
-1. **Manifest validation** — checks `pinch.toml` for required fields, valid slug, semver, etc.
-2. **Contract tests** — starts your server, initializes MCP session, discovers tools, calls each with minimal inputs
-3. **Custom tests** — runs `[[test]]` blocks from your `pinch.toml`
-
-Add custom test cases to your manifest:
+You can add test cases to your `pinch.toml` file so `pinch test` verifies your tool works correctly:
 
 ```toml
 [[test]]
-tool = "generate_invoice"
+tool = "create_invoice"
 input = { client = "Test Corp", amount = 100 }
 expect_type = "json"
 expect_contains = "Test Corp"
+
+[[test]]
+tool = "hello"
+input = { name = "Alice" }
+expect_contains = "Alice"
 ```
 
-## Configuration
+Each test calls a tool with specific inputs and checks the response. If the response doesn't match expectations, the test fails with a helpful error message.
 
-### pinch.toml (project manifest)
+---
 
-```toml
-[tool]
-name = "My Cool Tool"
-slug = "my-cool-tool"
-description = "Does something amazing"
-version = "1.0.0"
-category = "productivity"
-tags = ["ai", "automation"]
+## Typical Workflows
 
-[tool.mcp]
-endpoint = "/mcp"
-transport = "streamable-http"
+### "I want to build something from scratch"
 
-[tool.pricing]
-type = "free"  # or "credits" with credit_cost = 5
+```bash
+npx pinch-cli init my-tool       # Pick a template
+cd my-tool
+# Edit src/tools.ts if you want to customize
+npx pinch-cli dev                # Test locally
+npx pinch-cli test               # Make sure it works
+npx pinch-cli deploy             # Ship it
 ```
 
-### ~/.pinchrc (global config)
+### "I want AI to build it for me"
 
-Stores authentication and deployment credentials. Created automatically by `pinch login` and `pinch deploy`.
+```bash
+npx pinch-cli prompt "describe your tool here"
+# Paste into Claude/ChatGPT, get JSON back
+npx pinch-cli import output.json
+cd my-tool
+npx pinch-cli dev                # Test the AI-generated code
+npx pinch-cli deploy             # Ship it
+```
+
+### "I want to earn money from my tool"
+
+```bash
+# Build your tool (either workflow above)
+npx pinch-cli login              # Sign into Pinchers.ai
+npx pinch-cli deploy pinchers    # Publish to marketplace
+# Set your price, earn 90% of every credit spent
+```
+
+---
+
+## Troubleshooting
+
+### "npx pinch-cli" doesn't work
+
+Make sure Node.js is installed: `node --version`. You need version 18 or higher. If it's older, download the latest from [nodejs.org](https://nodejs.org).
+
+### "Port 3100 is already in use"
+
+Another program is using that port. Use a different one:
+
+```bash
+npx pinch-cli dev --port 3200
+```
+
+### "pinch test" says my manifest is invalid
+
+Open `pinch.toml` and check that all required fields are filled in:
+- `name` — Your tool's display name
+- `slug` — A URL-friendly version (lowercase, hyphens, no spaces)
+- `description` — What your tool does (more than 5 characters)
+- `version` — Must be in `X.Y.Z` format (like `1.0.0`)
+
+### "Deploy to Cloudflare failed"
+
+- Make sure your API token has **Workers** permissions
+- Double-check your Account ID (find it on the Cloudflare dashboard under Workers & Pages)
+- Try reconfiguring: `npx pinch-cli deploy cloudflare --setup`
+
+### My tool works locally but not after deploying
+
+- If your tool uses a database (`schema.sql`), the migration might have failed. Try redeploying.
+- If your tool calls external APIs, make sure those APIs don't block requests from Cloudflare Workers.
+- Check that you're not using Node.js-only features (Cloudflare Workers run in a different environment).
+
+---
 
 ## Contributing
 
-See [CONTRIBUTING.md](./CONTRIBUTING.md) for development setup and guidelines. PRs welcome!
+We'd love your help making Pinch better! Here are some ways to contribute:
 
-Ideas for contributions:
-- New project templates
-- New deploy targets (Railway, Fly.io, AWS Lambda)
-- Bridge API extensions
-- Documentation improvements
+- **New templates** — Build a cool tool? Turn it into a template for others
+- **New deploy targets** — Railway, Fly.io, AWS Lambda, etc.
+- **Documentation** — Found something confusing? Help us explain it better
+- **Bug reports** — Found a problem? Open an issue on GitHub
+
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for development setup.
 
 ## License
 
-[MIT](./LICENSE)
+[MIT](./LICENSE) — Use it however you want.
